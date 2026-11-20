@@ -250,6 +250,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const byNum = (a, b) => ((a.numero ?? 1e9) - (b.numero ?? 1e9)) || motoName(a).localeCompare(motoName(b));
   function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
   function errMsg(e) {
+    if (e && e.userMsg) return e.userMsg;
+    if (e && e.code === "23505") return "Esiste già una moto con la stessa targa, numero di telaio o numero moto.";
     if (e && e.message && /JWT|auth/i.test(e.message)) return "Sessione scaduta: esci e rientra.";
     if (e && e.code === "quota_exceeded") return "Spazio dati esaurito: elimina qualche voce e riprova.";
     if (e && e.code === "invalid_argument") return "Non hai i permessi per modificare i dati.";
@@ -361,7 +363,16 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         { id: "scadRevisione", label: "Scadenza revisione", type: "date", value: m?.scadRevisione },
         { id: "note", label: "Note", type: "textarea", full: true, value: m?.note },
       ],
-      onSubmit: async (v) => { await save("moto", m?.id, v); toast(m ? "Moto aggiornata" : "Moto aggiunta"); },
+      onSubmit: async (v) => {
+        const norm = (s) => String(s ?? "").toUpperCase().replace(/[\s.\-]/g, "");
+        const others = S.moto.filter(x => x.id !== m?.id);
+        const dup = (k, label) => { const val = norm(v[k]); const d = val && others.find(x => norm(x[k]) === val); return d ? `${label} è già registrato per ${d.numero != null ? "N. " + d.numero + " " : ""}${motoName(d)}.` : null; };
+        const msg = dup("numero", "Il numero moto") || dup("targa", "Questa targa") || dup("telaio", "Questo numero di telaio");
+        if (msg) throw { userMsg: msg + " Una moto non può essere registrata due volte." };
+        if (v.targa) v.targa = String(v.targa).toUpperCase().trim();
+        if (v.telaio) v.telaio = String(v.telaio).toUpperCase().trim();
+        await save("moto", m?.id, v); toast(m ? "Moto aggiornata" : "Moto aggiunta");
+      },
     });
   }
   function formInt(motoIdX, it) {
