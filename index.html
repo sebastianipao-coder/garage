@@ -197,8 +197,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   .fields { grid-template-columns: 1fr; }
   .brow { grid-template-columns: 1fr 90px; }
   .brow .track { grid-column: 1 / -1; grid-row: 2; }
-  .overlay { align-items: flex-end; padding: 0; }
-  .modal { border-radius: 18px 18px 0 0; max-width: none; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+  .overlay { align-items: flex-end; padding: 0; overflow: hidden; }
+  .modal { border-radius: 18px 18px 0 0; max-width: none; max-height: calc(100dvh - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch; padding-top: 20px; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
