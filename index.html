@@ -67,7 +67,10 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 header.top { position: sticky; top: 0; z-index: 5; background: var(--bar-bg); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-bottom: .5px solid var(--line); }
 .top-in { max-width: 860px; margin: 0 auto; padding: 14px 20px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .brand { display: flex; flex-direction: column; gap: 0; }
-#logout { order: 2; }
+.top-acts { display: flex; gap: 6px; order: 2; }
+#invite[hidden], #logout[hidden] { display: none; }
+.linkbox { display: flex; gap: 8px; }
+.linkbox input { flex: 1; min-width: 0; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--fill); font-size: 14px; }
 .login { max-width: 380px; margin: 40px auto; padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; border-radius: 20px; }
 .login p { margin: 0; color: var(--muted); }
 .brand small { color: var(--muted); font-size: 13px; }
@@ -204,7 +207,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
 <header class="top">
   <div class="top-in">
     <div class="brand"><h1>Garage</h1><small id="sync">Caricamento…</small></div>
-    <button class="btn sm ghost" id="logout" hidden>Esci</button>
+    <div class="top-acts"><button class="btn sm" id="invite" hidden>Invita</button><button class="btn sm ghost" id="logout" hidden>Esci</button></div>
     <nav class="tabs" id="tabs">
       <a href="#moto" data-v="moto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 10h6l3.5 6.5M15 10l-2-4h3M9 10l2.5 6.5H15"/></svg><span>Moto</span><span class="badge" id="badge" hidden></span></a>
       <a href="#ricambi" data-v="ricambi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16z"/><path d="M3.5 8 12 12.5 20.5 8M12 12.5v8"/></svg><span>Ricambi</span></a>
@@ -221,7 +224,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const COLS = ["moto", "interventi", "documenti", "ricambi"];
   const S = { moto: [], interventi: [], documenti: [], ricambi: [] };
   const loaded = new Set();
-  let sb = null, session = null, canWrite = true, offline = false, failed = false, setup = false;
+  let sb = null, session = null, membro = null, canWrite = true, offline = false, failed = false, setup = false;
+  const inviteCode = (location.hash.match(/^#invito-([a-f0-9]{8,64})$/) || [])[1] || null;
   let view = "moto", motoId = null, q = "", rcSort = "descrizione", repYear = "tutti";
 
   const TIPI_INT = ["Tagliando", "Cambio olio", "Gomme", "Catena / trasmissione", "Freni", "Batteria", "Riparazione", "Accessori", "Altro"];
@@ -582,9 +586,12 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const nBad = urgentSc().length;
     const b = $("#badge"); b.hidden = !nBad; b.textContent = nBad;
     const ready = COLS.every(c => loaded.has(c));
-    const nav = $("#tabs"); nav.hidden = !session; $("#logout").hidden = !session;
+    const nav = $("#tabs"); nav.hidden = !(session && membro); $("#logout").hidden = !session;
     if (setup) { $("#sync").textContent = "Da configurare"; $("#app").innerHTML = `<div class="card login"><h2>Configurazione mancante</h2><p>Apri il file <b>config.js</b> e inserisci il Project URL e la chiave anon del tuo progetto Supabase. Le istruzioni sono nel README del repository.</p></div>`; return; }
-    if (!session) { $("#sync").textContent = "Accedi per continuare"; if (!$("#lf")) renderLogin(); return; }
+    $("#invite").hidden = !(session && membro);
+    if (!session) { $("#sync").textContent = inviteCode ? "Invito" : "Accedi per continuare"; if (!$("#lf")) (inviteCode ? renderSignup() : renderLogin()); return; }
+    if (membro === null) { $("#sync").textContent = "Verifica accesso…"; $("#app").innerHTML = `<div class="card empty-big"><p>Verifica dell'accesso…</p></div>`; return; }
+    if (membro === false) { nav.hidden = true; $("#sync").textContent = "Accesso non abilitato"; $("#app").innerHTML = `<div class="card login"><h2>Account non abilitato</h2><p>Il tuo account esiste ma non è ancora abilitato al garage. Chiedi a chi gestisce l'app un nuovo link di invito e registrati da lì, oppure di abilitarti.</p></div>`; return; }
     $("#sync").textContent = failed ? "Dati non disponibili" : ready ? "Dati sincronizzati" : "Caricamento…";
     let notice = "";
     if (failed) notice = `<div class="note">Non riesco a leggere i dati. Controlla la connessione e ricarica la pagina.</div>`;
@@ -646,6 +653,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#ov")) closeModal(); });
   function route() {
     const h = location.hash.replace("#", "");
+    if (h.startsWith("invito-")) { view = "moto"; render(); return; }
     view = ["moto", "ricambi", "report"].includes(h) ? h : "moto";
     if (view !== "moto") motoId = null;
     render();
@@ -671,12 +679,74 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       if (error) { $("#lerr").textContent = "Email o password non corrette."; $("#lsub").disabled = false; }
     };
   }
+  function renderSignup() {
+    $("#app").innerHTML = `<form class="card login" id="lf" novalidate>
+      <h2>Sei stato invitato nel garage</h2>
+      <p>Crea il tuo account per vedere e gestire moto e ricambi.</p>
+      <div class="field"><label for="se">Email</label><input id="se" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="sp">Password</label><input id="sp" type="password" autocomplete="new-password" required><span class="hint">Almeno 8 caratteri</span></div>
+      <div class="field"><label for="sp2">Ripeti la password</label><input id="sp2" type="password" autocomplete="new-password" required></div>
+      <div class="err" id="lerr"></div>
+      <button class="btn pri" type="submit" id="lsub" style="justify-content:center;padding:12px">Crea account</button>
+      <button class="back" type="button" id="tologin" style="font-size:15px">Ho già un account: accedi</button>
+    </form>`;
+    $("#tologin").onclick = () => renderLogin();
+    $("#lf").onsubmit = async (e) => {
+      e.preventDefault();
+      const em = $("#se").value.trim(), pw = $("#sp").value, pw2 = $("#sp2").value;
+      if (!/^\S+@\S+\.\S+$/.test(em)) { $("#lerr").textContent = "Inserisci un indirizzo email valido."; return; }
+      if (pw.length < 8) { $("#lerr").textContent = "La password deve avere almeno 8 caratteri."; return; }
+      if (pw !== pw2) { $("#lerr").textContent = "Le due password non coincidono."; return; }
+      $("#lsub").disabled = true; $("#lerr").textContent = "";
+      const { data, error } = await sb.auth.signUp({ email: em, password: pw, options: { data: { invito: inviteCode } } });
+      if (error) {
+        $("#lerr").textContent = /registered|exists/i.test(error.message) ? "Esiste già un account con questa email: accedi." : "Registrazione non riuscita. Riprova tra poco.";
+        $("#lsub").disabled = false; return;
+      }
+      if (!data.session) { $("#lerr").textContent = "Account creato: controlla la tua email per confermarlo, poi accedi."; }
+      try { history.replaceState(null, "", location.pathname); } catch (e) {}
+    };
+  }
+  async function openInvite() {
+    $("#modal-root").innerHTML = `<div class="overlay" id="ov"><div class="modal" role="dialog" aria-modal="true">
+      <h2>Invita un collaboratore</h2>
+      <p style="margin:0;color:var(--muted)">Manda questo link a chi deve usare il garage: aprendolo crea il suo account e vede subito moto e ricambi.</p>
+      <div class="linkbox"><input id="ilink" readonly value="Caricamento…" aria-label="Link di invito"><button class="btn pri" id="icopy">Copia</button></div>
+      <div class="err" id="merr"></div>
+      <div class="modal-acts" style="justify-content:space-between;flex-wrap:wrap">
+        <button class="btn danger" id="iregen">Disattiva e crea nuovo link</button>
+        <div style="display:flex;gap:8px">${navigator.share ? `<button class="btn" id="ishare">Condividi</button>` : ""}<button class="btn" id="mcancel">Chiudi</button></div>
+      </div></div></div>`;
+    $("#mcancel").onclick = closeModal;
+    $("#ov").addEventListener("mousedown", e => { if (e.target.id === "ov") closeModal(); });
+    const base = location.origin + location.pathname;
+    const show = (c) => { $("#ilink").value = `${base}#invito-${c}`; };
+    const { data, error } = await sb.rpc("codice_invito");
+    if (error || !data) { $("#merr").textContent = "Non riesco a leggere il link di invito."; } else show(data);
+    $("#icopy").onclick = async () => { try { await navigator.clipboard.writeText($("#ilink").value); toast("Link copiato"); } catch (e) { $("#ilink").select(); toast("Seleziona e copia il link"); } };
+    if ($("#ishare")) $("#ishare").onclick = async () => { try { await navigator.share({ title: "Garage", text: "Ti invito a gestire moto e ricambi nel mio garage:", url: $("#ilink").value }); } catch (e) {} };
+    $("#iregen").onclick = async () => {
+      $("#iregen").disabled = true;
+      const r = await sb.rpc("rigenera_invito");
+      if (r.error) $("#merr").textContent = "Non riesco a creare un nuovo link."; else { show(r.data); toast("Nuovo link creato: quello vecchio non funziona più"); }
+      $("#iregen").disabled = false;
+    };
+  }
+  $("#invite").onclick = openInvite;
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
 
   // ---------- data connection ----------
   let channel = null;
   const pending = {};
+  async function checkMembro() {
+    membro = null; render();
+    const { data, error } = await sb.rpc("is_membro");
+    membro = error ? false : !!data;
+    if (inviteCode && membro) { try { history.replaceState(null, "", location.pathname); } catch (e) {} }
+    return membro;
+  }
   async function loadAll() {
+    if (!(await checkMembro())) { render(); return; }
     failed = false; loaded.clear(); render();
     try { await Promise.all(COLS.map(fetchTable)); } catch (e) { failed = true; }
     render();
@@ -696,7 +766,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     session = data.session;
     sb.auth.onAuthStateChange((ev, s) => {
       const was = !!session; session = s;
-      if (!s) { if (channel) { sb.removeChannel(channel); channel = null; } COLS.forEach(c => S[c] = []); loaded.clear(); render(); }
+      if (!s) { membro = null; if (channel) { sb.removeChannel(channel); channel = null; } COLS.forEach(c => S[c] = []); loaded.clear(); render(); }
       else if (!was) loadAll();
     });
     if (session) loadAll(); else render();

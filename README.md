@@ -15,15 +15,19 @@ Web app per gestire le proprie moto e il magazzino ricambi, utilizzabile da qual
 - Dati, accesso e file su [Supabase](https://supabase.com) (piano gratuito).
 - Sul telefono si può aggiungere alla schermata Home (Safari → Condividi → Aggiungi alla schermata Home) e si apre come un'app.
 
-## Accesso
+## Accesso e collaboratori
 
-Le registrazioni sono disattivate. Gli utenti si creano dal pannello Supabase:
-**Authentication → Users → Add user → Create new user** (lasciare attivo "Auto confirm user").
+- Nell'app, il pulsante **Invita** mostra il link di invito da mandare ai collaboratori: aprendolo creano il proprio account e vedono subito i dati.
+- **Disattiva e crea nuovo link** rende inutilizzabile il link precedente (gli account già creati restano attivi).
+- Chi si registra senza un link valido non vede nessun dato.
+- Si possono anche creare utenti dal pannello Supabase (Authentication → Users → Add user) e abilitarli con:
+  `insert into public.membri (user_id) select id from auth.users where email = 'email@esempio.it';`
+- Per togliere l'accesso a qualcuno: `delete from public.membri where user_id = (select id from auth.users where email = 'email@esempio.it');`
 
 ## Rifare la configurazione da zero
 
 1. Crea un progetto su Supabase.
 2. In **SQL Editor** esegui il contenuto di `schema.sql`.
-3. In **Authentication → Sign In / Providers** disattiva "Allow new users to sign up".
+3. Esegui anche `invito.sql`. In **Authentication → Sign In / Providers** lascia attivo "Allow new users to sign up" e disattiva "Confirm email".
 4. In `config.js` inserisci il Project URL e la chiave **anon public** (Settings → API Keys). Non usare mai la chiave `service_role`.
 5. Pubblica il repository con GitHub Pages (Settings → Pages → branch `main`, cartella `/`).
