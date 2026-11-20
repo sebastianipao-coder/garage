@@ -197,8 +197,9 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   .fields { grid-template-columns: 1fr; }
   .brow { grid-template-columns: 1fr 90px; }
   .brow .track { grid-column: 1 / -1; grid-row: 2; }
-  .overlay { display: block; padding: calc(10px + env(safe-area-inset-top)) 8px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .modal { max-width: none; margin: 0 auto; border-radius: 18px; }
+  body.modal-open header.top, body.modal-open main, body.modal-open nav.tabs { display: none !important; }
+  .overlay { position: static; display: block; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; padding: calc(10px + env(safe-area-inset-top)) 8px calc(24px + env(safe-area-inset-bottom)); overflow: visible; min-height: 100vh; animation: none; }
+  .modal { max-width: none; margin: 0 auto; border-radius: 18px; box-shadow: none; animation: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -267,7 +268,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const urgentSc = () => allSc().filter(s => s.st.lvl !== "ok");
 
   // ---------- modal / forms ----------
-  function closeModal() { $("#modal-root").innerHTML = ""; }
+  function closeModal() { $("#modal-root").innerHTML = ""; document.body.classList.remove("modal-open"); }
+  function modalOpened() { document.body.classList.add("modal-open"); window.scrollTo(0, 0); }
   function openForm({ title, fields, submit = "Salva", onSubmit }) {
     const html = `<div class="overlay" id="ov"><form class="modal" id="mf" novalidate>
       <h2>${esc(title)}</h2>
@@ -283,10 +285,10 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       <div class="modal-acts"><button type="button" class="btn" id="mcancel">Annulla</button><button type="submit" class="btn pri" id="msub">${esc(submit)}</button></div>
     </form></div>`;
     $("#modal-root").innerHTML = html;
+    modalOpened();
     $("#mcancel").onclick = closeModal;
     $("#ov").addEventListener("mousedown", e => { if (e.target.id === "ov") closeModal(); });
     const first = $("#mf input, #mf select, #mf textarea"); if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
-    $("#ov").scrollTop = 0;
     $("#mf").onsubmit = async (e) => {
       e.preventDefault();
       const vals = {};
@@ -305,6 +307,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       <h3>${esc(text)}</h3><p style="margin:0;color:var(--muted)">Questa operazione non si può annullare.</p>
       <div class="err" id="merr"></div>
       <div class="modal-acts"><button class="btn" id="mcancel">Annulla</button><button class="btn pri" id="myes" style="background:var(--bad);color:#fff">${esc(label)}</button></div></div></div>`;
+    modalOpened();
     $("#mcancel").onclick = closeModal;
     $("#myes").focus();
     $("#myes").onclick = async () => { $("#myes").disabled = true; try { await onYes(); closeModal(); } catch (e) { $("#merr").textContent = errMsg(e); $("#myes").disabled = false; } };
@@ -718,6 +721,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         <button class="btn danger" id="iregen">Disattiva e crea nuovo link</button>
         <div style="display:flex;gap:8px">${navigator.share ? `<button class="btn" id="ishare">Condividi</button>` : ""}<button class="btn" id="mcancel">Chiudi</button></div>
       </div></div></div>`;
+    modalOpened();
     $("#mcancel").onclick = closeModal;
     $("#ov").addEventListener("mousedown", e => { if (e.target.id === "ov") closeModal(); });
     const base = location.origin + location.pathname;
