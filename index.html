@@ -4,11 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Garage Moto e Ricambi</title>
-<meta name="theme-color" content="#f2f2f7">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<script>try { var t = localStorage.getItem("garage-tema"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Garage">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -65,7 +68,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 :focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 1px; }
 
 header.top { position: sticky; top: 0; z-index: 5; background: var(--bar-bg); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-bottom: .5px solid var(--line); }
-.top-in { max-width: 860px; margin: 0 auto; padding: 14px 20px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.top-in { max-width: 860px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top)) 20px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .brand { display: flex; flex-direction: column; gap: 0; }
 .top-acts { display: flex; gap: 6px; order: 2; }
 #invite[hidden], #logout[hidden] { display: none; }
@@ -106,6 +109,13 @@ input[type=search] { padding-left: 14px; }
 .moto-card:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.08); }
 .nr { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 1px 7px; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
 .scrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.filters input[type=search] { flex: 1 1 220px; }
+.filters select { padding: 10px 30px 10px 12px; border: 0; border-radius: 10px; background: var(--fill); }
+.tag { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--fill); border-radius: 6px; padding: 1px 7px; }
+.tag.off { color: var(--bad); background: var(--bad-soft); }
+.moto-card.inactive { opacity: .6; }
+.cal-steps { margin: 0; padding-left: 20px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
 .swipe { position: relative; overflow: hidden; border-top: .5px solid var(--line); margin-left: -16px; }
 .swipe:first-child { border-top: 0; }
 .swipe-acts { position: absolute; top: 0; bottom: 0; right: 0; display: flex; }
@@ -195,7 +205,7 @@ td.n, th.n { text-align: right; }
 nav.tabs[hidden], #logout[hidden] { display: none; }
 @media (max-width: 620px) {
   header.top { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--surface); }
-  .top-in { padding: 12px 16px 10px; }
+  .top-in { padding: calc(12px + env(safe-area-inset-top)) 16px 10px; }
   main { padding: 18px 16px calc(96px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--bar-bg); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: .5px solid var(--line); border-radius: 0; padding: 6px 0 calc(8px + env(safe-area-inset-bottom)); justify-content: space-around; }
   nav.tabs a { flex-direction: column; gap: 2px; font-size: 10.5px; font-weight: 500; padding: 2px 8px; color: var(--muted); position: relative; }
@@ -221,7 +231,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
 <header class="top">
   <div class="top-in">
     <div class="brand"><h1>Garage</h1><small id="sync">Caricamento…</small></div>
-    <div class="top-acts"><button class="btn sm" id="invite" hidden>Invita</button><button class="btn sm ghost" id="logout" hidden>Esci</button></div>
+    <div class="top-acts"><button class="btn sm ghost" id="tema" title="Tema" aria-label="Tema: automatico">◐</button><button class="btn sm" id="invite" hidden>Invita</button><button class="btn sm ghost" id="logout" hidden>Esci</button></div>
     <nav class="tabs" id="tabs">
       <a href="#moto" data-v="moto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 10h6l3.5 6.5M15 10l-2-4h3M9 10l2.5 6.5H15"/></svg><span>Moto</span><span class="badge" id="badge" hidden></span></a>
       <a href="#ricambi" data-v="ricambi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16z"/><path d="M3.5 8 12 12.5 20.5 8M12 12.5v8"/></svg><span>Ricambi</span></a>
@@ -240,6 +250,9 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const loaded = new Set();
   let sb = null, session = null, membro = null, canWrite = true, offline = false, failed = false, setup = false;
   const inviteCode = (location.hash.match(/^#invito-([a-f0-9]{8,64})$/) || [])[1] || null;
+  let mq = "", fSede = "tutte", fStato = "attive";
+  const STATI = ["Attiva", "In officina", "Ferma", "Venduta", "Demolita"];
+  const isAttiva = (m) => !["Venduta", "Demolita"].includes(m.stato);
   let view = "moto", motoId = null, q = "", rcSort = "descrizione", repYear = "tutti";
 
   const TIPI_INT = ["Assicurazione", "Bollo", "Revisione", "Tagliando", "Cambio olio", "Gomme", "Catena / trasmissione", "Freni", "Batteria", "Riparazione", "Accessori", "Altro"];
@@ -279,7 +292,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const txt = days < 0 ? `scaduta da ${-days} gg` : days === 0 ? "scade oggi" : days === 1 ? "scade domani" : `tra ${days} gg`;
     return { lvl, txt, days };
   }
-  const allSc = () => S.moto.flatMap(m => SCAD.filter(([k]) => m[k]).map(([k, tipo]) => ({ moto: m, tipo, data: m[k], st: stato(m[k]) }))).sort((a, b) => a.st.days - b.st.days);
+  const allSc = () => S.moto.filter(isAttiva).flatMap(m => SCAD.filter(([k]) => m[k]).map(([k, tipo]) => ({ moto: m, tipo, data: m[k], st: stato(m[k]) }))).sort((a, b) => a.st.days - b.st.days);
   const urgentSc = () => allSc().filter(s => s.st.lvl !== "ok");
 
   // ---------- modal / forms ----------
@@ -375,6 +388,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         { id: "scadAssicurazione", label: "Scadenza assicurazione", type: "date", value: m?.scadAssicurazione },
         { id: "scadBollo", label: "Scadenza bollo", type: "date", value: m?.scadBollo },
         { id: "scadRevisione", label: "Scadenza revisione", type: "date", value: m?.scadRevisione },
+        { id: "sede", label: "Sede", value: m?.sede, list: [...new Set(S.moto.map(x => x.sede).filter(Boolean))].sort() },
+        { id: "stato", label: "Stato", type: "select", options: STATI, value: m?.stato || "Attiva", hint: "Venduta e Demolita escono da scadenze e calendario" },
         { id: "note", label: "Note", type: "textarea", full: true, value: m?.note },
       ],
       onSubmit: async (v) => {
@@ -385,6 +400,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         if (msg) throw { userMsg: msg + " Una moto non può essere registrata due volte." };
         if (v.targa) v.targa = String(v.targa).toUpperCase().trim();
         if (v.telaio) v.telaio = String(v.telaio).toUpperCase().trim();
+        if (v.sede) v.sede = String(v.sede).toUpperCase().trim();
         await save("moto", m?.id, v); toast(m ? "Moto aggiornata" : "Moto aggiunta");
       },
     });
@@ -504,7 +520,12 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
 
   function vMotoList() {
     if (!S.moto.length) return `<div class="card empty-big"><h2>Nessuna moto ancora</h2><p>Aggiungi la tua prima moto con le scadenze di assicurazione, bollo e revisione: le vedrai evidenziate 30 giorni prima e potrai metterle nel calendario.</p>${addBtn("addMoto", "Aggiungi moto")}</div>`;
-        const moto = [...S.moto].sort(byNum);
+        const sedi = [...new Set(S.moto.map(x => x.sede).filter(Boolean))].sort();
+    const qn = mq.trim().toLowerCase().replace(/\s+/g, "");
+    const moto = [...S.moto].sort(byNum).filter(m =>
+      (fSede === "tutte" || (m.sede || "") === fSede) &&
+      (fStato === "tutte" || (fStato === "attive" ? isAttiva(m) : (m.stato || "Attiva") === fStato)) &&
+      (!qn || [m.numero, m.targa, m.telaio, m.marca, m.modello, m.sede, "n" + m.numero].some(x => String(x ?? "").toLowerCase().replace(/\s+/g, "").includes(qn))));
     const urg = urgentSc();
     const keyOf = (t) => (SCAD.find(([, l]) => l === t) || [""])[0];
     const alertBox = urg.length ? `<div class="section"><div class="section-h"><h3>Da rinnovare</h3>${W() ? `<span class="swipe-hint">Scorri a sinistra per rinnovare</span>` : ""}</div><div class="list">${urg.map(s => `<div class="swipe">
@@ -515,12 +536,18 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         <div><span class="pill ${s.st.lvl}">${esc(s.st.txt)}</span></div>
         <div>${W() ? `<button class="btn sm renew-desk" data-act="renew" data-id="${esc(s.moto.id)}" data-key="${keyOf(s.tipo)}">Rinnova</button>` : ""}</div>
       </div></div>`).join("")}</div></div>` : "";
-    return alertBox + `<div class="bar"><h2>Le tue moto <span class="num" style="color:var(--muted);font-weight:600">${moto.length}</span></h2><div style="display:flex;gap:8px;flex-wrap:wrap">${allSc().length ? `<button class="btn" data-act="icsAll">Scadenze nel calendario</button>` : ""}${addBtn("addMoto", "Aggiungi moto")}</div></div>
+    return alertBox + `<div class="bar"><h2>Le tue moto <span class="num" style="color:var(--muted);font-weight:600">${moto.length}${moto.length !== S.moto.length ? " di " + S.moto.length : ""}</span></h2><div style="display:flex;gap:8px;flex-wrap:wrap">${allSc().length ? `<button class="btn" data-act="calendario">Calendario</button>` : ""}${addBtn("addMoto", "Aggiungi moto")}</div></div>
+    <div class="filters">
+      <input type="search" id="mq" placeholder="Cerca per targa, numero o modello" value="${esc(mq)}" aria-label="Cerca moto">
+      <select id="fsede" aria-label="Filtra per sede"><option value="tutte">Tutte le sedi</option>${sedi.map(s => `<option${s === fSede ? " selected" : ""}>${esc(s)}</option>`).join("")}</select>
+      <select id="fstato" aria-label="Filtra per stato">${[["attive", "Solo attive"], ["tutte", "Tutti gli stati"], ...STATI.map(s => [s, s])].map(([v, l]) => `<option value="${esc(v)}"${v === fStato ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>
+    </div>
+    ${moto.length ? "" : `<div class="card empty">Nessuna moto corrisponde alla ricerca.</div>`}
     <div class="grid-moto">${moto.map(m => {
-      return `<button class="moto-card" data-act="openMoto" data-id="${esc(m.id)}">
-        <div>${numTag(m)}<h3>${esc(motoName(m))}</h3><div class="sub">${[m.anno, m.targa].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div>
+      return `<button class="moto-card${isAttiva(m) ? "" : " inactive"}" data-act="openMoto" data-id="${esc(m.id)}">
+        <div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${numTag(m).replace('class="nr"', 'class="nr" style="margin:0"')}${m.sede ? `<span class="tag">${esc(m.sede)}</span>` : ""}${m.stato && m.stato !== "Attiva" ? `<span class="tag${isAttiva(m) ? "" : " off"}">${esc(m.stato)}</span>` : ""}</div><h3 style="margin-top:6px">${esc(motoName(m))}</h3><div class="sub">${[m.anno, m.targa].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div>
         <div class="kv"><div><span>Km</span><b class="num">${m.km != null ? fmtN(m.km) : "–"}</b></div><div><span>Spesa totale</span><b class="num">${fmtE(spesa(m.id))}</b></div></div>
-        <div class="scrow">${SCAD.map(([k, t]) => m[k] ? `<span class="pill ${stato(m[k]).lvl}">${t}: ${esc(stato(m[k]).txt)}</span>` : `<span class="pill neutral">${t}: non inserita</span>`).join("")}</div>
+        <div class="scrow">${!isAttiva(m) ? `<span class="pill neutral">${esc(m.stato)}: scadenze non monitorate</span>` : SCAD.map(([k, t]) => m[k] ? `<span class="pill ${stato(m[k]).lvl}">${t}: ${esc(stato(m[k]).txt)}</span>` : `<span class="pill neutral">${t}: non inserita</span>`).join("")}</div>
       </button>`;
     }).join("")}</div>`;
   }
@@ -534,6 +561,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       <div class="bar"><div>${numTag(m)}<h2>${esc(motoName(m))}</h2></div>${W() ? `<div style="display:flex;gap:8px"><button class="btn sm" data-act="editMoto" data-id="${esc(m.id)}">Modifica</button><button class="btn sm danger" data-act="delMoto" data-id="${esc(m.id)}">Elimina</button></div>` : ""}</div>
       <div class="kv">
         <div><span>Numero</span><b class="num">${esc(m.numero ?? "–")}</b></div>
+        <div><span>Sede</span><b>${esc(m.sede || "–")}</b></div>
+        <div><span>Stato</span><b${isAttiva(m) ? "" : ' style="color:var(--bad)"'}>${esc(m.stato || "Attiva")}</b></div>
         <div><span>Anno</span><b class="num">${esc(m.anno ?? "–")}</b></div>
         <div><span>Targa</span><b>${esc(m.targa || "–")}</b></div>
         <div><span>Telaio</span><b>${esc(m.telaio || "–")}</b></div>
@@ -658,10 +687,10 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     else if (view === "moto") { const m = motoId && getMoto(motoId); body = m ? vMotoDetail(m) : vMotoList(); }
     else if (view === "ricambi") body = vRicambi();
     else body = vReport();
-    const hadFocus = document.activeElement && document.activeElement.id === "q";
-    const caret = hadFocus ? document.activeElement.selectionStart : null;
+    const fid = document.activeElement && ["q", "mq"].includes(document.activeElement.id) ? document.activeElement.id : null;
+    const caret = fid ? document.activeElement.selectionStart : null;
     $("#app").innerHTML = notice + body;
-    if (hadFocus && $("#q")) { $("#q").focus(); try { $("#q").setSelectionRange(caret, caret); } catch (e) {} }
+    if (fid && $("#" + fid)) { $("#" + fid).focus(); try { $("#" + fid).setSelectionRange(caret, caret); } catch (e) {} }
   }
 
   // ---------- events ----------
@@ -682,6 +711,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     renew: (id, el) => formRinnova(id, el.dataset.key),
     icsMoto: (id) => downloadIcs(allSc().filter(s => s.moto.id === id), `scadenze-moto-${getMoto(id)?.numero ?? "x"}.ics`),
     icsAll: () => downloadIcs(allSc(), "scadenze-moto.ics"),
+    calendario: () => openCalendario(),
     delDoc: (id) => openConfirm("Eliminare questo documento?", "Elimina", async () => { const d = S.documenti.find(x => x.id === id); await removeFile(d); await del("documenti", id); toast("Documento eliminato"); }),
     addRc: () => formRc(),
     editRc: (id) => formRc(S.ricambi.find(x => x.id === id)),
@@ -744,9 +774,11 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const el = e.target.closest("[data-act]"); if (!el) return;
     const f = A[el.dataset.act]; if (f) { e.preventDefault(); f(el.dataset.id, el); }
   });
-  document.addEventListener("input", (e) => { if (e.target.id === "q") { q = e.target.value; render(); } });
+  document.addEventListener("input", (e) => { if (e.target.id === "q") { q = e.target.value; render(); } if (e.target.id === "mq") { mq = e.target.value; render(); } });
   document.addEventListener("change", (e) => {
     if (e.target.id === "rcsort") { rcSort = e.target.value; render(); }
+    if (e.target.id === "fsede") { fSede = e.target.value; render(); }
+    if (e.target.id === "fstato") { fStato = e.target.value; render(); }
     if (e.target.id === "repyear") { repYear = e.target.value; render(); }
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#ov")) closeModal(); });
@@ -844,8 +876,50 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       $("#iregen").disabled = false;
     };
   }
+  async function openCalendario() {
+    $("#modal-root").innerHTML = `<div class="overlay" id="ov"><div class="modal" role="dialog" aria-modal="true">
+      <h2>Scadenze nel calendario</h2>
+      <p style="margin:0;color:var(--muted)">Abbonati una volta sola: il calendario del telefono si aggiorna da solo quando cambi o rinnovi una data, con un avviso 30 e 7 giorni prima di ogni scadenza.</p>
+      <a class="btn pri" id="csub" href="#" style="justify-content:center;padding:12px;text-decoration:none">Abbonati al calendario</a>
+      <ol class="cal-steps">
+        <li><b>iPhone:</b> tocca il pulsante e conferma "Iscriviti".</li>
+        <li><b>Android / Google Calendar:</b> copia il link e in Google Calendar dal computer scegli "Altri calendari" → "Da URL".</li>
+      </ol>
+      <div class="linkbox"><input id="clink" readonly value="Caricamento…" aria-label="Link del calendario"><button class="btn" id="ccopy">Copia</button></div>
+      <div class="err" id="merr"></div>
+      <div class="modal-acts" style="justify-content:space-between;flex-wrap:wrap"><button class="btn" data-act="icsAll">Scarica file una tantum</button><button class="btn" id="mcancel">Chiudi</button></div>
+    </div></div>`;
+    modalOpened();
+    $("#mcancel").onclick = closeModal;
+    $("#ov").addEventListener("mousedown", e => { if (e.target.id === "ov") closeModal(); });
+    const { data, error } = await sb.rpc("calendario_link");
+    if (error || !data) { $("#merr").textContent = "Non riesco a leggere il link del calendario."; return; }
+    const cfg = window.GARAGE_CONFIG;
+    const https = `${cfg.SUPABASE_URL}/rest/v1/rpc/calendario_ics?t=${data}&apikey=${cfg.SUPABASE_ANON_KEY}`;
+    $("#clink").value = https;
+    $("#csub").href = https.replace(/^https:/, "webcal:");
+    $("#ccopy").onclick = async () => { try { await navigator.clipboard.writeText(https); toast("Link copiato"); } catch (e) { $("#clink").select(); toast("Seleziona e copia il link"); } };
+  }
   $("#invite").onclick = openInvite;
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
+  const TEMI = [["auto", "◐", "automatico"], ["light", "☀︎", "chiaro"], ["dark", "☾", "scuro"]];
+  function applyTema(t) {
+    const root = document.documentElement;
+    if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
+    const [, icon, label] = TEMI.find(x => x[0] === t) || TEMI[0];
+    $("#tema").textContent = icon; $("#tema").setAttribute("aria-label", "Tema: " + label); $("#tema").title = "Tema: " + label;
+    document.querySelectorAll('meta[name="theme-color"]').forEach(mt => {
+      if (t === "light") mt.setAttribute("content", "#f2f2f7"); else if (t === "dark") mt.setAttribute("content", "#1c1c1e");
+      else mt.setAttribute("content", (mt.getAttribute("media") || "").includes("dark") ? "#1c1c1e" : "#f2f2f7");
+    });
+  }
+  let tema = "auto"; try { tema = localStorage.getItem("garage-tema") || "auto"; } catch (e) {}
+  applyTema(tema);
+  $("#tema").onclick = () => {
+    tema = TEMI[(TEMI.findIndex(x => x[0] === tema) + 1) % TEMI.length][0];
+    try { localStorage.setItem("garage-tema", tema); } catch (e) {}
+    applyTema(tema); toast("Tema: " + TEMI.find(x => x[0] === tema)[2]);
+  };
 
   // ---------- data connection ----------
   let channel = null;
