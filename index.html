@@ -106,6 +106,19 @@ input[type=search] { padding-left: 14px; }
 .moto-card:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.08); }
 .nr { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 1px 7px; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
 .scrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.swipe { position: relative; overflow: hidden; border-top: .5px solid var(--line); margin-left: -16px; }
+.swipe:first-child { border-top: 0; }
+.swipe-acts { position: absolute; top: 0; bottom: 0; right: 0; display: flex; }
+.swipe-acts button { border: 0; color: #fff; font-weight: 600; font-size: 15px; width: 84px; cursor: pointer; }
+.sa-renew { background: var(--accent); }
+.sa-open { background: #8e8e93; }
+.swipe-right-bg { position: absolute; inset: 0; background: #34c759; color: #fff; font-weight: 600; display: flex; align-items: center; padding-left: 20px; opacity: 0; }
+.swipe.right .swipe-right-bg { opacity: 1; }
+.swipe-row { position: relative; background: var(--surface); touch-action: pan-y; transition: transform .25s cubic-bezier(.2,.8,.2,1); display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; align-items: center; padding: 12px 16px; cursor: pointer; -webkit-user-select: none; user-select: none; }
+.swipe-row .meta { color: var(--muted); font-size: 14px; }
+.swipe-hint { color: var(--muted); font-size: 13px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.renew-desk { display: none; }
+@media (hover: hover) and (pointer: fine) { .renew-desk { display: inline-flex; } .swipe-hint { display: none; } }
 .moto-card .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
 .kv { display: flex; gap: 22px; flex-wrap: wrap; }
 .kv div { display: flex; flex-direction: column; gap: 1px; }
@@ -229,7 +242,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const inviteCode = (location.hash.match(/^#invito-([a-f0-9]{8,64})$/) || [])[1] || null;
   let view = "moto", motoId = null, q = "", rcSort = "descrizione", repYear = "tutti";
 
-  const TIPI_INT = ["Tagliando", "Cambio olio", "Gomme", "Catena / trasmissione", "Freni", "Batteria", "Riparazione", "Accessori", "Altro"];
+  const TIPI_INT = ["Assicurazione", "Bollo", "Revisione", "Tagliando", "Cambio olio", "Gomme", "Catena / trasmissione", "Freni", "Batteria", "Riparazione", "Accessori", "Altro"];
   const TIPI_SC = ["Assicurazione", "Bollo", "Revisione", "Tagliando", "Altro"];
 
   // ---------- utils ----------
@@ -395,6 +408,29 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       },
     });
   }
+  const RINNOVO_MESI = { scadAssicurazione: 12, scadBollo: 12, scadRevisione: 24 };
+  const fineMese = (s) => { const d = new Date(s + "T00:00:00"); const e = new Date(d.getFullYear(), d.getMonth() + 1, 0); return `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}-${String(e.getDate()).padStart(2, "0")}`; };
+  function formRinnova(id, key) {
+    const m = getMoto(id); if (!m) return;
+    const tipo = (SCAD.find(([k]) => k === key) || [key, key])[1];
+    const per = RINNOVO_MESI[key] || 12;
+    let next = addMonths(m[key] || today(), per);
+    while (next < today()) next = addMonths(next, per);
+    if (key !== "scadAssicurazione") next = fineMese(next);
+    openForm({
+      title: `Rinnova ${tipo.toLowerCase()} · ${m.numero != null ? "N. " + m.numero + " " : ""}${motoName(m)}`,
+      submit: "Rinnova",
+      fields: [
+        { id: "data", label: "Nuova scadenza", type: "date", required: true, value: next, hint: m[key] ? `Scadenza attuale: ${fmtD(m[key])}` : "" },
+        { id: "costo", label: "Quanto hai pagato (€)", type: "number", step: "0.01", hint: "Facoltativo: finisce nello storico spese e nei report" },
+      ],
+      onSubmit: async (v) => {
+        await save("moto", id, { [key]: v.data });
+        if (v.costo != null) await save("interventi", null, { motoId: id, data: today(), tipo, descrizione: `Rinnovo ${tipo.toLowerCase()} fino al ${fmtD(v.data)}`, costo: v.costo, km: m.km ?? null });
+        toast(`${tipo} rinnovata fino al ${fmtD(v.data)}`);
+      },
+    });
+  }
   function formRc(r) {
     openForm({
       title: r ? "Modifica ricambio" : "Nuovo ricambio",
@@ -470,9 +506,15 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     if (!S.moto.length) return `<div class="card empty-big"><h2>Nessuna moto ancora</h2><p>Aggiungi la tua prima moto con le scadenze di assicurazione, bollo e revisione: le vedrai evidenziate 30 giorni prima e potrai metterle nel calendario.</p>${addBtn("addMoto", "Aggiungi moto")}</div>`;
         const moto = [...S.moto].sort(byNum);
     const urg = urgentSc();
-    const alertBox = urg.length ? `<div class="section"><div class="section-h"><h3>Da rinnovare</h3></div><div class="list">${urg.map(s => `<div class="row row-doc" data-act="openMoto" data-id="${esc(s.moto.id)}" style="cursor:pointer">
-      <div><b>${esc(s.tipo)}</b> · ${numTag(s.moto).replace('class="nr"', 'class="nr" style="margin:0 4px 0 0"')}${esc(motoName(s.moto))}<div class="meta">Scadenza ${esc(fmtD(s.data))}</div></div>
-      <div><span class="pill ${s.st.lvl}">${esc(s.st.txt)}</span></div></div>`).join("")}</div></div>` : "";
+    const keyOf = (t) => (SCAD.find(([, l]) => l === t) || [""])[0];
+    const alertBox = urg.length ? `<div class="section"><div class="section-h"><h3>Da rinnovare</h3>${W() ? `<span class="swipe-hint">Scorri a sinistra per rinnovare</span>` : ""}</div><div class="list">${urg.map(s => `<div class="swipe">
+      <div class="swipe-right-bg">Rinnova</div>
+      ${W() ? `<div class="swipe-acts"><button class="sa-renew" data-act="renew" data-id="${esc(s.moto.id)}" data-key="${keyOf(s.tipo)}">Rinnova</button><button class="sa-open" data-act="openMoto" data-id="${esc(s.moto.id)}">Apri</button></div>` : ""}
+      <div class="swipe-row" data-act="openMoto" data-id="${esc(s.moto.id)}" data-key="${keyOf(s.tipo)}" data-swipe="${W() ? 1 : 0}">
+        <div><b>${esc(s.tipo)}</b> · ${numTag(s.moto).replace('class="nr"', 'class="nr" style="margin:0 4px 0 0"')}${esc(motoName(s.moto))}<div class="meta">Scadenza ${esc(fmtD(s.data))}</div></div>
+        <div><span class="pill ${s.st.lvl}">${esc(s.st.txt)}</span></div>
+        <div>${W() ? `<button class="btn sm renew-desk" data-act="renew" data-id="${esc(s.moto.id)}" data-key="${keyOf(s.tipo)}">Rinnova</button>` : ""}</div>
+      </div></div>`).join("")}</div></div>` : "";
     return alertBox + `<div class="bar"><h2>Le tue moto <span class="num" style="color:var(--muted);font-weight:600">${moto.length}</span></h2><div style="display:flex;gap:8px;flex-wrap:wrap">${allSc().length ? `<button class="btn" data-act="icsAll">Scadenze nel calendario</button>` : ""}${addBtn("addMoto", "Aggiungi moto")}</div></div>
     <div class="grid-moto">${moto.map(m => {
       return `<button class="moto-card" data-act="openMoto" data-id="${esc(m.id)}">
@@ -498,7 +540,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         <div><span>Km attuali</span><b class="num">${m.km != null ? fmtN(m.km) : "–"}</b></div>
         <div><span>Spesa totale</span><b class="num">${fmtE(tot)}</b></div>
       </div>
-      <div class="kv" style="align-items:flex-end">${SCAD.map(([k, t]) => `<div><span>${t}</span><b>${m[k] ? esc(fmtD(m[k])) : "–"}</b>${m[k] ? `<span class="pill ${stato(m[k]).lvl}" style="margin-top:4px;align-self:flex-start">${esc(stato(m[k]).txt)}</span>` : (W() ? `<button class="back" style="font-size:14px;margin-top:2px" data-act="editMoto" data-id="${esc(m.id)}">Inserisci data</button>` : "")}</div>`).join("")}${SCAD.some(([k]) => m[k]) ? `<div><button class="btn sm" data-act="icsMoto" data-id="${esc(m.id)}">Aggiungi al calendario</button></div>` : ""}</div>
+      <div class="kv" style="align-items:flex-end">${SCAD.map(([k, t]) => `<div><span>${t}</span><b>${m[k] ? esc(fmtD(m[k])) : "–"}</b>${m[k] ? `<span class="pill ${stato(m[k]).lvl}" style="margin-top:4px;align-self:flex-start">${esc(stato(m[k]).txt)}</span>${W() ? `<button class="back" style="font-size:14px;margin-top:4px;align-self:flex-start" data-act="renew" data-id="${esc(m.id)}" data-key="${k}">Rinnova</button>` : ""}` : (W() ? `<button class="back" style="font-size:14px;margin-top:2px" data-act="editMoto" data-id="${esc(m.id)}">Inserisci data</button>` : "")}</div>`).join("")}${SCAD.some(([k]) => m[k]) ? `<div><button class="btn sm" data-act="icsMoto" data-id="${esc(m.id)}">Aggiungi al calendario</button></div>` : ""}</div>
       ${m.note ? `<div style="color:var(--muted);white-space:pre-wrap">${esc(m.note)}</div>` : ""}
     </div>
 
@@ -637,6 +679,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     delInt: (id) => openConfirm("Eliminare questo intervento?", "Elimina", async () => { await del("interventi", id); toast("Intervento eliminato"); }),
     upDoc: (id) => uploadDoc(id),
     openDoc: (id) => openDoc(id),
+    renew: (id, el) => formRinnova(id, el.dataset.key),
     icsMoto: (id) => downloadIcs(allSc().filter(s => s.moto.id === id), `scadenze-moto-${getMoto(id)?.numero ?? "x"}.ics`),
     icsAll: () => downloadIcs(allSc(), "scadenze-moto.ics"),
     delDoc: (id) => openConfirm("Eliminare questo documento?", "Elimina", async () => { const d = S.documenti.find(x => x.id === id); await removeFile(d); await del("documenti", id); toast("Documento eliminato"); }),
@@ -657,7 +700,47 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     catch (e) { toast(errMsg(e)); }
     finally { busy.delete(id); }
   }
+  // ---------- swipe (come in Mail su iPhone) ----------
+  const OPEN_X = -168;
+  let sw = null;
+  const snap = (row, x) => { row.style.transition = ""; row.style.transform = x ? `translateX(${x}px)` : ""; row._open = x < 0; row.parentElement.classList.toggle("right", false); };
+  const closeOthers = (keep) => document.querySelectorAll(".swipe-row").forEach(r => { if (r !== keep && r._open) snap(r, 0); });
+  document.addEventListener("pointerdown", (e) => {
+    const row = e.target.closest(".swipe-row");
+    if (!row || row.dataset.swipe !== "1" || (e.pointerType === "mouse" && e.button !== 0)) return;
+    closeOthers(row);
+    sw = { row, x: e.clientX, y: e.clientY, base: row._open ? OPEN_X : 0, t: row._open ? OPEN_X : 0, dragging: false, id: e.pointerId };
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+    if (!sw.dragging) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) { sw.dragging = true; sw.row.style.transition = "none"; try { sw.row.setPointerCapture(sw.id); } catch (err) {} }
+      else if (Math.abs(dy) > 10) { sw = null; return; }
+      else return;
+    }
+    let t = Math.max(-260, Math.min(160, sw.base + dx));
+    sw.t = t;
+    sw.row.style.transform = `translateX(${t}px)`;
+    sw.row.parentElement.classList.toggle("right", t > 0);
+  });
+  const endSwipe = (e) => {
+    if (!sw || (e && e.pointerId !== sw.id)) return;
+    const { row, dragging, t } = sw; sw = null;
+    if (!dragging) return;
+    row._justDragged = true; setTimeout(() => { row._justDragged = false; }, 80);
+    if (t > 90 || t < -220) { snap(row, 0); formRinnova(row.dataset.id, row.dataset.key); }
+    else if (t < -60) snap(row, OPEN_X);
+    else snap(row, 0);
+  };
+  document.addEventListener("pointerup", endSwipe);
+  document.addEventListener("pointercancel", (e) => { if (sw && sw.row) snap(sw.row, 0); sw = null; });
+
   document.addEventListener("click", (e) => {
+    const srow = e.target.closest(".swipe-row");
+    if (srow && srow._justDragged) { e.preventDefault(); return; }
+    if (srow && srow._open && !e.target.closest(".renew-desk")) { e.preventDefault(); snap(srow, 0); return; }
+    if (!e.target.closest(".swipe")) closeOthers(null);
     const el = e.target.closest("[data-act]"); if (!el) return;
     const f = A[el.dataset.act]; if (f) { e.preventDefault(); f(el.dataset.id, el); }
   });
