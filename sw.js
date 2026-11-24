@@ -15,6 +15,7 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  if (url.pathname.includes("/giornate/")) return; // app Giornate: ha il suo service worker
   const mine = url.origin === self.location.origin || url.href.startsWith("https://cdn.jsdelivr.net/npm/@supabase/");
   if (!mine) return; // dati Supabase: sempre dalla rete
   e.respondWith((async () => {
