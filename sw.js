@@ -1,6 +1,6 @@
 // Garage: funziona anche senza rete. Prima prova la rete (così gli aggiornamenti arrivano subito),
 // se non c'è usa la copia salvata.
-const CACHE = "garage-v13";
+const CACHE = "garage-v14";
 const ASSETS = ["./", "./index.html", "./config.js", "./manifest.json", "./icon-180.png", "./icon-192.png", "./icon-512.png",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"];
 
@@ -28,5 +28,22 @@ self.addEventListener("fetch", (e) => {
       if (hit) return hit;
       throw err;
     }
+  })());
+});
+
+// Notifiche push delle scadenze
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: "Garage", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Garage", {
+    body: d.body || "", tag: d.tag || "garage", icon: "icon-192.png", badge: "icon-192.png", data: { url: "./#moto" },
+  }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) { if ("focus" in c) { c.navigate && c.navigate("./#moto"); return c.focus(); } }
+    return self.clients.openWindow("./#moto");
   })());
 });

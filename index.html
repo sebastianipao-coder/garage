@@ -256,7 +256,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
 <header class="top">
   <div class="top-in">
     <div class="brand"><h1>Garage</h1><small id="sync">Caricamento…</small></div>
-    <div class="top-acts"><button class="btn sm ghost" id="tema" title="Tema" aria-label="Tema: automatico">◐</button><button class="btn sm" id="invite" hidden>Invita</button><button class="btn sm ghost" id="logout" hidden>Esci</button></div>
+    <div class="top-acts"><button class="btn sm ghost" id="tema" title="Tema" aria-label="Tema: automatico">◐</button><button class="btn sm ghost" id="notif" hidden title="Notifiche" aria-label="Notifiche"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button><button class="btn sm" id="invite" hidden>Invita</button><button class="btn sm ghost" id="logout" hidden>Esci</button></div>
     <nav class="tabs" id="tabs">
       <a href="#moto" data-v="moto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 10h6l3.5 6.5M15 10l-2-4h3M9 10l2.5 6.5H15"/></svg><span>Moto</span><span class="badge" id="badge" hidden></span></a>
       <a href="#ricambi" data-v="ricambi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8 12 3.5 20.5 8v8L12 20.5 3.5 16z"/><path d="M3.5 8 12 12.5 20.5 8M12 12.5v8"/></svg><span>Ricambi</span></a>
@@ -784,6 +784,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const nav = $("#tabs"); nav.hidden = !(session && membro); $("#logout").hidden = !session;
     if (setup) { $("#sync").textContent = "Da configurare"; $("#app").innerHTML = `<div class="card login"><h2>Configurazione mancante</h2><p>Apri il file <b>config.js</b> e inserisci il Project URL e la chiave anon del tuo progetto Supabase. Le istruzioni sono nel README del repository.</p></div>`; return; }
     $("#invite").hidden = !(session && membro);
+    $("#notif").hidden = !(session && membro);
     if (!session) { $("#sync").textContent = inviteCode ? "Invito" : "Accedi per continuare"; if (!$("#lf")) (inviteCode ? renderSignup() : renderLogin()); return; }
     if (membro === null) { $("#sync").textContent = "Verifica accesso…"; $("#app").innerHTML = `<div class="card empty-big"><p>Verifica dell'accesso…</p></div>`; return; }
     if (membro === false) { nav.hidden = true; $("#sync").textContent = "Accesso non abilitato"; $("#app").innerHTML = `<div class="card login"><h2>Account non abilitato</h2><p>Il tuo account esiste ma non è ancora abilitato al garage. Chiedi a chi gestisce l'app un nuovo link di invito e registrati da lì, oppure di abilitarti.</p></div>`; return; }
@@ -1017,6 +1018,60 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     $("#csub").href = https.replace(/^https:/, "webcal:");
     $("#ccopy").onclick = async () => { try { await navigator.clipboard.writeText(https); toast("Link copiato"); } catch (e) { $("#clink").select(); toast("Seleziona e copia il link"); } };
   }
+  // ---------- notifiche push ----------
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const b64ToU8 = (s) => { const p = "=".repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+  async function currentSub() { try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); } catch (e) { return null; } }
+  async function openNotifiche() {
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    const sub = supported ? await currentSub() : null;
+    const on = !!sub && Notification.permission === "granted";
+    let msg = "";
+    if (!supported && isIOS && !isStandalone()) msg = `Su iPhone le notifiche funzionano solo dall'app aggiunta alla schermata Home: in Safari tocca <b>Condividi</b> → <b>Aggiungi alla schermata Home</b>, poi apri Garage dall'icona e torna qui.`;
+    else if (!supported) msg = "Questo browser non supporta le notifiche. Su iPhone serve iOS 16.4 o successivo e l'app aggiunta alla schermata Home.";
+    else if (Notification.permission === "denied") msg = "Le notifiche sono bloccate per Garage. Riattivale dalle impostazioni del telefono (Impostazioni → Notifiche → Garage) e riprova.";
+    $("#modal-root").innerHTML = `<div class="overlay" id="ov"><div class="modal" role="dialog" aria-modal="true">
+      <h2>Notifiche</h2>
+      <p style="margin:0;color:var(--muted)">Ogni mattina alle 8 controllo le scadenze: se un'assicurazione, un bollo o una revisione scade <b>tra 7 giorni</b>, ti arriva una notifica su questo dispositivo.</p>
+      ${msg ? `<div class="note">${msg}</div>` : `<div class="note ${on ? "offline" : ""}">${on ? "Notifiche attive su questo dispositivo." : "Notifiche non attive su questo dispositivo."}</div>`}
+      <div class="err" id="merr"></div>
+      <div class="modal-acts" style="justify-content:space-between;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${!msg ? (on ? `<button class="btn" id="ntest">Invia una prova</button><button class="btn danger" id="noff">Disattiva</button>` : `<button class="btn pri" id="non">Attiva notifiche</button>`) : ""}</div>
+        <button class="btn" id="mcancel">Chiudi</button>
+      </div></div></div>`;
+    modalOpened();
+    $("#mcancel").onclick = closeModal;
+    $("#ov").addEventListener("mousedown", e => { if (e.target.id === "ov") closeModal(); });
+    if ($("#non")) $("#non").onclick = async () => {
+      $("#non").disabled = true; $("#merr").textContent = "";
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") throw { userMsg: "Permesso negato: per riceverle consenti le notifiche quando il telefono te lo chiede." };
+        const { data: key, error } = await sb.rpc("push_vapid"); if (error || !key) throw error || {};
+        const reg = await navigator.serviceWorker.ready;
+        const s = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(key) });
+        const r = await sb.rpc("salva_push", { sub: s.toJSON() }); if (r.error) throw r.error;
+        await fetch(window.GARAGE_CONFIG.SUPABASE_URL + "/functions/v1/notifiche", { method: "POST", headers: { Authorization: "Bearer " + session.access_token, apikey: window.GARAGE_CONFIG.SUPABASE_ANON_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ test: true }) }).catch(() => {});
+        toast("Notifiche attivate"); openNotifiche();
+      } catch (e) { $("#merr").textContent = (e && e.userMsg) || "Non sono riuscito ad attivare le notifiche. Riprova con la rete attiva."; $("#non").disabled = false; }
+    };
+    if ($("#ntest")) $("#ntest").onclick = async () => {
+      $("#ntest").disabled = true;
+      try {
+        const s = await currentSub(); if (s) await sb.rpc("salva_push", { sub: s.toJSON() });
+        const r = await fetch(window.GARAGE_CONFIG.SUPABASE_URL + "/functions/v1/notifiche", { method: "POST", headers: { Authorization: "Bearer " + session.access_token, apikey: window.GARAGE_CONFIG.SUPABASE_ANON_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ test: true }) });
+        const j = await r.json(); toast(j.inviate ? "Prova inviata: arriva tra pochi secondi" : "Prova non riuscita: disattiva e riattiva le notifiche");
+      } catch (e) { toast("Serve la rete per inviare la prova."); }
+      $("#ntest").disabled = false;
+    };
+    if ($("#noff")) $("#noff").onclick = async () => {
+      const s = await currentSub();
+      if (s) { await sb.rpc("rimuovi_push", { endpoint: s.endpoint }).catch(() => {}); await s.unsubscribe().catch(() => {}); }
+      toast("Notifiche disattivate"); openNotifiche();
+    };
+  }
+  $("#notif").onclick = openNotifiche;
   $("#invite").onclick = openInvite;
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
   const TEMI = [["auto", "◐", "automatico"], ["light", "☀︎", "chiaro"], ["dark", "☾", "scuro"]];
