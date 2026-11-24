@@ -31,7 +31,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue"
   max-width:520px;margin:0 auto;min-height:100vh}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 header{display:flex;align-items:center;justify-content:space-between;padding:14px 0 6px}
-header h1{font-size:30px;white-space:nowrap;font-weight:700;letter-spacing:.2px;margin:0;text-transform:capitalize}
+header{gap:12px}
+header h1{font-size:26px;white-space:nowrap;font-weight:700;letter-spacing:.2px;margin:0;text-transform:capitalize}
 header .year{color:var(--muted);font-weight:600}
 .icon-btn{width:36px;height:36px;border-radius:18px;display:grid;place-items:center;background:var(--fill);color:var(--blue)}
 .icon-btn svg{width:20px;height:20px}
@@ -82,6 +83,16 @@ header .year{color:var(--muted);font-weight:600}
 .switch input:checked+span::after{transform:translateX(20px)}
 .row.action{color:var(--blue);justify-content:center}
 .row.danger{color:var(--holiday);justify-content:center}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.chip{height:64px;border-radius:14px;background:var(--card);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;position:relative;transition:transform .1s}
+.chip:active{transform:scale(.94)}
+.chip.sug{box-shadow:inset 0 0 0 2px var(--accent)}
+.chip.sel{background:var(--accent);color:var(--accent-text);box-shadow:none}
+.chip small{position:absolute;left:0;right:0;bottom:6px;font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.3px}
+.chip.sel small{color:var(--accent-text)}
+.other{display:flex;gap:10px;margin-top:10px}
+.other input{flex:1;min-width:0;height:50px;border-radius:12px;border:0;background:var(--card);color:var(--text);font:inherit;font-size:17px;padding:0 14px;outline:none;-webkit-user-select:text;user-select:text}
+.other button{height:50px;padding:0 18px;border-radius:12px;background:var(--accent);color:var(--accent-text);font-weight:600}
 .seg{display:flex;background:var(--fill);border-radius:9px;padding:2px}
 .seg button{padding:5px 12px;border-radius:7px;font-size:14px;font-weight:500}
 .seg button.sel{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15)}
@@ -106,7 +117,7 @@ header .year{color:var(--muted);font-weight:600}
   <div class="dow"><div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div></div>
   <div class="grid" id="grid"></div>
 </section>
-<p class="hint">Tocca un giorno per segnarlo come lavorato.<br>Tieni premuto per cambiare l'importo di quel giorno.</p>
+<p class="hint">Tocca un giorno e scegli l'importo per segnarlo come lavorato.</p>
 <button class="today-btn" id="goToday" hidden>Vai a oggi</button>
 
 <div class="backdrop" id="backdrop"></div>
@@ -114,32 +125,34 @@ header .year{color:var(--muted);font-weight:600}
 <!-- Day sheet -->
 <div class="sheet" id="daySheet" role="dialog" aria-modal="true">
   <div class="grab"></div>
-  <div class="sheet-head"><h2 id="dayTitle">—</h2><button class="done" data-close>Fine</button></div>
-  <div class="list">
-    <label class="row">Lavorato <span class="switch"><input type="checkbox" id="dWorked"><span></span></span></label>
-    <div class="row">Tipo giorno
-      <div class="seg" id="dType"><button data-v="auto">Auto</button><button data-v="norm">Feriale</button><button data-v="hol">Festivo</button></div>
-    </div>
-    <label class="row">Importo <input type="number" inputmode="decimal" step="0.01" id="dAmount" placeholder="—"></label>
-  </div>
-  <p class="foot" id="dFoot"></p>
+  <div class="sheet-head"><h2 id="dayTitle">—</h2><button class="done" data-close>Annulla</button></div>
+  <p class="foot" id="dFoot" style="margin:-6px 4px 14px"></p>
+  <div class="chips" id="chips"></div>
+  <div class="other"><input type="text" inputmode="decimal" id="dOther" placeholder="Altro importo €"><button id="dOtherOk">OK</button></div>
+  <div class="list" id="dRemoveWrap" style="margin-top:18px"><button class="row danger" id="dRemove" style="width:100%">Non ho lavorato</button></div>
 </div>
 
 <!-- Settings sheet -->
 <div class="sheet" id="setSheet" role="dialog" aria-modal="true">
   <div class="grab"></div>
   <div class="sheet-head"><h2>Impostazioni</h2><button class="done" data-close>Fine</button></div>
-  <div class="group-title">Paga giornaliera netta</div>
+  <div class="group-title">Importo suggerito</div>
   <div class="list">
-    <label class="row">Giorno feriale <input type="number" inputmode="decimal" step="0.01" id="sRate" placeholder="0 €"></label>
-    <label class="row">Domenica e festivi <input type="number" inputmode="decimal" step="0.01" id="sHol" placeholder="0 €"></label>
+    <label class="row">Lunedì – venerdì <input type="text" inputmode="decimal" id="sRate" placeholder="25"></label>
+    <label class="row">Sab, dom e festivi <input type="text" inputmode="decimal" id="sHol" placeholder="30"></label>
   </div>
+  <div class="group-title">Importi da scegliere</div>
+  <div class="list">
+    <label class="row">Importi <input type="text" inputmode="decimal" id="sQuick" placeholder="25, 30, 35, 40" style="width:170px"></label>
+  </div>
+  <p class="foot">Separati da virgola. Sono i tasti che compaiono quando tocchi un giorno. L'importo scelto resta fisso su quel giorno anche se poi cambi queste impostazioni.</p>
   <div class="group-title">Festivi</div>
   <div class="list">
-    <label class="row">Domenica è festivo <span class="switch"><input type="checkbox" id="sSun"><span></span></span></label>
+    <label class="row">Sabato come festivo <span class="switch"><input type="checkbox" id="sSat"><span></span></span></label>
+    <label class="row">Domenica come festivo <span class="switch"><input type="checkbox" id="sSun"><span></span></span></label>
     <label class="row">Santo patrono <input type="text" id="sPatron" placeholder="gg/mm"></label>
   </div>
-  <p class="foot">I festivi nazionali italiani sono già inclusi (Capodanno, Epifania, Pasquetta, 25 Aprile, 1° Maggio, 2 Giugno, Ferragosto, 4 Ottobre, Ognissanti, Immacolata, Natale, Santo Stefano).</p>
+  <p class="foot">Questi giorni usano l'importo suggerito festivo. I festivi nazionali italiani sono già inclusi (Capodanno, Epifania, Pasquetta, 25 Aprile, 1° Maggio, 2 Giugno, Ferragosto, 4 Ottobre, Ognissanti, Immacolata, Natale, Santo Stefano).</p>
   <div class="group-title">Backup</div>
   <div class="list">
     <button class="row action" id="exportBtn">Esporta backup</button>
@@ -157,8 +170,11 @@ const eur = n => n.toLocaleString('it-IT',{style:'currency',currency:'EUR',minim
 
 let state = load();
 function load(){
-  try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.days) return s; }catch(e){}
-  return { settings:{ rate:0, holRate:0, sunday:true, patron:'' }, days:{} };
+  let s=null; try{ s = JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+  if(!s || !s.days) s = { settings:{}, days:{} };
+  const d = { rate:25, holRate:30, saturday:true, sunday:true, patron:'', quick:[25,30,35,40] };
+  for(const k in d) if(s.settings[k]===undefined || ((k==='rate'||k==='holRate') && !s.settings[k])) s.settings[k]=d[k];
+  return s;
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 
@@ -185,7 +201,9 @@ function holidayName(y,m,d){
   const n = nationalHolidays(y).get(md); if(n) return n;
   const p = (state.settings.patron||'').match(/^(\d{1,2})\/(\d{1,2})$/);
   if(p && +p[1]===d && +p[2]===m+1) return 'Santo patrono';
-  if(state.settings.sunday && new Date(y,m,d).getDay()===0) return 'Domenica';
+  const wd = new Date(y,m,d).getDay();
+  if(state.settings.sunday && wd===0) return 'Domenica';
+  if(state.settings.saturday && wd===6) return 'Sabato';
   return null;
 }
 function isHoliday(y,m,d){
@@ -218,37 +236,17 @@ function render(){
     if(cy===now.getFullYear()&&cm===now.getMonth()&&d===now.getDate()) b.classList.add('today');
     b.textContent = d;
     if(rec && rec.worked){ b.classList.add('on'); days++; if(h) hol++; total+=amountFor(cy,cm,d); }
-    if(rec && (typeof rec.amount==='number' || rec.type)){ const dot=document.createElement('span'); dot.className='dot'; b.appendChild(dot); }
     grid.appendChild(b);
   }
   document.getElementById('days').textContent = days;
-  document.getElementById('daysSub').textContent = days ? (hol ? `di cui ${hol} festiv${hol===1?'o':'i'}` : 'tutti feriali') : ' ';
+  document.getElementById('daysSub').textContent = days ? (hol ? `di cui ${hol} sab/dom/festiv${hol===1?'o':'i'}` : 'tutti feriali') : ' ';
   document.getElementById('money').textContent = eur(total);
-  document.getElementById('moneySub').textContent = (!state.settings.rate && !state.settings.holRate) ? 'imposta la paga ⚙︎' : 'netto';
+  document.getElementById('moneySub').textContent = 'netto';
   document.getElementById('goToday').hidden = (cy===now.getFullYear()&&cm===now.getMonth());
 }
 
-function toggle(d){
-  const k = keyOf(cy,cm,d);
-  const rec = state.days[k] || {};
-  rec.worked = !rec.worked;
-  state.days[k] = rec; clean(k); save(); render();
-  if(navigator.vibrate) navigator.vibrate(8);
-}
-function clean(k){ const r=state.days[k]; if(r && !r.worked && r.amount==null && !r.type) delete state.days[k]; }
-
-// tap vs long press
 const grid = document.getElementById('grid');
-let lpTimer=null, lpFired=false, startXY=null;
-grid.addEventListener('pointerdown', e=>{
-  const b = e.target.closest('.day'); if(!b) return;
-  lpFired=false; startXY=[e.clientX,e.clientY];
-  lpTimer = setTimeout(()=>{ lpFired=true; openDay(+b.dataset.d); }, 450);
-});
-grid.addEventListener('pointermove', e=>{ if(lpTimer && startXY && Math.hypot(e.clientX-startXY[0],e.clientY-startXY[1])>10){ clearTimeout(lpTimer); lpTimer=null; } });
-['pointerup','pointercancel','pointerleave'].forEach(t=>grid.addEventListener(t,()=>{ clearTimeout(lpTimer); lpTimer=null; }));
-grid.addEventListener('click', e=>{ const b=e.target.closest('.day'); if(!b) return; if(lpFired){ lpFired=false; return; } toggle(+b.dataset.d); });
-grid.addEventListener('contextmenu', e=>e.preventDefault());
+grid.addEventListener('click', e=>{ const b=e.target.closest('.day'); if(b) openDay(+b.dataset.d); });
 
 document.getElementById('prev').onclick=()=>{ cm--; if(cm<0){cm=11;cy--;} render(); };
 document.getElementById('next').onclick=()=>{ cm++; if(cm>11){cm=0;cy++;} render(); };
@@ -268,40 +266,50 @@ backdrop.onclick=hide; document.querySelectorAll('[data-close]').forEach(b=>b.on
 
 // day sheet
 let curDay=null;
-const dWorked=document.getElementById('dWorked'), dAmount=document.getElementById('dAmount'), dType=document.getElementById('dType');
+const chips=document.getElementById('chips'), dOther=document.getElementById('dOther');
+function setDay(amount){
+  const k=keyOf(cy,cm,curDay);
+  if(amount==null){ delete state.days[k]; }
+  else state.days[k]={ worked:true, amount };
+  save(); if(navigator.vibrate) navigator.vibrate(10); hide();
+}
 function openDay(d){
-  curDay=d; const k=keyOf(cy,cm,d); const rec=state.days[k]||{};
+  curDay=d; const rec=state.days[keyOf(cy,cm,d)];
   const wd = WD[new Date(cy,cm,d).getDay()];
   document.getElementById('dayTitle').textContent = `${wd} ${d} ${MONTHS[cm]}`;
-  dWorked.checked=!!rec.worked;
-  dAmount.value = typeof rec.amount==='number' ? rec.amount : '';
-  setSeg(rec.type||'auto'); updateDayFoot(); show(document.getElementById('daySheet'));
-  if(navigator.vibrate) navigator.vibrate(15);
+  const name = holidayName(cy,cm,d);
+  const sug = isHoliday(cy,cm,d) ? +state.settings.holRate : +state.settings.rate;
+  const cur = rec && rec.worked ? amountFor(cy,cm,d) : null;
+  document.getElementById('dFoot').textContent = cur!=null ? `Segnato: ${eur(cur)}. Tocca un importo per cambiarlo.` : (name ? `${name}.` : 'Giorno feriale.') + ' Quanto hai preso?';
+  const q = state.settings.quick||[];
+  const list = [...new Set([...q, ...(cur!=null && !q.includes(cur) ? [cur] : []), ...(!q.includes(sug) ? [sug] : [])])].sort((a,b)=>a-b);
+  chips.innerHTML='';
+  for(const v of list){
+    const b=document.createElement('button'); b.className='chip'; b.textContent=eur(v);
+    if(cur!=null){ if(v===cur) b.classList.add('sel'); }
+    else if(v===sug){ b.classList.add('sug'); const sm=document.createElement('small'); sm.textContent='suggerito'; b.appendChild(sm); }
+    b.onclick=()=>setDay(v); chips.appendChild(b);
+  }
+  dOther.value='';
+  document.getElementById('dRemoveWrap').hidden = cur==null;
+  show(document.getElementById('daySheet'));
 }
-function setSeg(v){ dType.querySelectorAll('button').forEach(b=>b.classList.toggle('sel', b.dataset.v===v)); }
-function updateDayFoot(){
-  const name = holidayName(cy,cm,curDay);
-  const h = isHoliday(cy,cm,curDay);
-  const std = h ? +state.settings.holRate||0 : +state.settings.rate||0;
-  dAmount.placeholder = eur(std);
-  document.getElementById('dFoot').textContent =
-    (name ? `${name}. ` : '') + `Conta come ${h?'festivo':'feriale'}: ${eur(std)}. Lascia l'importo vuoto per usare la paga standard.`;
-}
-function upd(fn){ const k=keyOf(cy,cm,curDay); const rec=state.days[k]||{}; fn(rec); state.days[k]=rec; clean(k); save(); updateDayFoot(); }
-dWorked.onchange=()=>upd(r=>r.worked=dWorked.checked);
-dType.onclick=e=>{ const b=e.target.closest('button'); if(!b) return; setSeg(b.dataset.v); upd(r=>{ if(b.dataset.v==='auto') delete r.type; else r.type=b.dataset.v; }); };
-dAmount.oninput=()=>upd(r=>{ const v=parseFloat(dAmount.value.replace(',','.')); if(isNaN(v)) delete r.amount; else { r.amount=v; r.worked=true; dWorked.checked=true; } });
+document.getElementById('dOtherOk').onclick=()=>{ const v=parseFloat(dOther.value.replace(',','.')); if(!isNaN(v) && v>=0) setDay(v); else dOther.focus(); };
+dOther.addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('dOtherOk').click(); });
+document.getElementById('dRemove').onclick=()=>setDay(null);
 
 // settings
-const sRate=document.getElementById('sRate'), sHol=document.getElementById('sHol'), sSun=document.getElementById('sSun'), sPatron=document.getElementById('sPatron');
+const sRate=document.getElementById('sRate'), sHol=document.getElementById('sHol'), sSun=document.getElementById('sSun'), sSat=document.getElementById('sSat'), sQuick=document.getElementById('sQuick'), sPatron=document.getElementById('sPatron');
 document.getElementById('openSettings').onclick=()=>{
-  sRate.value=state.settings.rate||''; sHol.value=state.settings.holRate||''; sSun.checked=state.settings.sunday!==false; sPatron.value=state.settings.patron||'';
+  sRate.value=state.settings.rate||''; sHol.value=state.settings.holRate||''; sSun.checked=state.settings.sunday!==false; sSat.checked=state.settings.saturday!==false; sQuick.value=(state.settings.quick||[]).join(', '); sPatron.value=state.settings.patron||'';
   show(document.getElementById('setSheet'));
 };
 const num = v => { const n=parseFloat(String(v).replace(',','.')); return isNaN(n)?0:n; };
 sRate.oninput=()=>{ state.settings.rate=num(sRate.value); save(); };
 sHol.oninput=()=>{ state.settings.holRate=num(sHol.value); save(); };
 sSun.onchange=()=>{ state.settings.sunday=sSun.checked; save(); };
+sSat.onchange=()=>{ state.settings.saturday=sSat.checked; save(); };
+sQuick.onchange=()=>{ const l=sQuick.value.split(/[,;\s]+/).map(x=>parseFloat(x.replace(',','.'))).filter(x=>!isNaN(x)&&x>=0); if(l.length){ state.settings.quick=[...new Set(l)].sort((a,b)=>a-b); save(); } sQuick.value=state.settings.quick.join(', '); };
 sPatron.oninput=()=>{ state.settings.patron=sPatron.value.trim(); save(); };
 
 document.getElementById('exportBtn').onclick=async()=>{
