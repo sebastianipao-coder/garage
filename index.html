@@ -7,7 +7,21 @@
 <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
-<script>try { var t = localStorage.getItem("garage-tema"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) {}</script>
+<script>
+(function () {
+  var t = "auto"; try { t = localStorage.getItem("garage-tema2") || "auto"; } catch (e) {}
+  var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function apply() {
+    var eff = t === "light" || t === "dark" ? t : (mq && mq.matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", eff);
+  }
+  window.__garageTema = { get: function () { return t; }, set: function (v) { t = v; apply(); }, apply: apply };
+  apply();
+  if (mq) { if (mq.addEventListener) mq.addEventListener("change", apply); else if (mq.addListener) mq.addListener(apply); }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) apply(); });
+  window.addEventListener("pageshow", apply);
+})();
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Garage">
@@ -111,6 +125,7 @@ input[type=search] { padding-left: 14px; }
 .scrow { display: flex; flex-wrap: wrap; gap: 6px; }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .filters input[type=search] { flex: 1 1 220px; }
+.filters input[type=search], .filters select, .bar input[type=search], .bar select { background: var(--surface); box-shadow: 0 0 0 .5px var(--line); }
 .filters select { padding: 10px 30px 10px 12px; border: 0; border-radius: 10px; background: var(--fill); }
 .tag { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--fill); border-radius: 6px; padding: 1px 7px; }
 .tag.off { color: var(--bad); background: var(--bad-soft); }
@@ -904,8 +919,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
   const TEMI = [["auto", "◐", "automatico"], ["light", "☀︎", "chiaro"], ["dark", "☾", "scuro"]];
   function applyTema(t) {
-    const root = document.documentElement;
-    if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
+    window.__garageTema.set(t);
     const [, icon, label] = TEMI.find(x => x[0] === t) || TEMI[0];
     $("#tema").textContent = icon; $("#tema").setAttribute("aria-label", "Tema: " + label); $("#tema").title = "Tema: " + label;
     document.querySelectorAll('meta[name="theme-color"]').forEach(mt => {
@@ -913,11 +927,11 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       else mt.setAttribute("content", (mt.getAttribute("media") || "").includes("dark") ? "#1c1c1e" : "#f2f2f7");
     });
   }
-  let tema = "auto"; try { tema = localStorage.getItem("garage-tema") || "auto"; } catch (e) {}
+  let tema = window.__garageTema.get();
   applyTema(tema);
   $("#tema").onclick = () => {
     tema = TEMI[(TEMI.findIndex(x => x[0] === tema) + 1) % TEMI.length][0];
-    try { localStorage.setItem("garage-tema", tema); } catch (e) {}
+    try { localStorage.setItem("garage-tema2", tema); } catch (e) {}
     applyTema(tema); toast("Tema: " + TEMI.find(x => x[0] === tema)[2]);
   };
 
