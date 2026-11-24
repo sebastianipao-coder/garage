@@ -4,7 +4,7 @@ Web app per gestire le proprie moto e il magazzino ricambi, utilizzabile da qual
 
 ## Funzioni
 
-- **Moto**: scheda con numero, marca, modello, anno, targa, telaio e km; scadenze di assicurazione e revisione evidenziate a 30 giorni; storico manutenzione con costi; documenti allegati (libretto, fatture, manuali).
+- **Moto**: scheda con numero, marca, modello, anno, targa, telaio e km; scadenze di assicurazione, bollo e revisione evidenziate a 30 giorni; storico manutenzione con costi; documenti allegati (libretto, fatture, manuali).
 - **Calendario**: il pulsante "Aggiungi al calendario" scarica un file `.ics` con le scadenze e due promemoria (30 e 7 giorni prima), da aprire con il calendario di iPhone, Android o computer.
 - **Ricambi**: codice, descrizione, quantità, prezzo e fornitore, con ricerca e valore totale del magazzino.
 - **Report**: spese per moto, per tipo di intervento e per anno; valore del magazzino per fornitore.

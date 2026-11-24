@@ -259,7 +259,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   }
 
   // ---------- deadline status ----------
-  const SCAD = [["scadAssicurazione", "Assicurazione"], ["scadRevisione", "Revisione"]];
+  const SCAD = [["scadAssicurazione", "Assicurazione"], ["scadBollo", "Bollo"], ["scadRevisione", "Revisione"]];
   function stato(data) {
     const days = daysTo(data);
     const lvl = days < 0 ? "bad" : days <= 30 ? "warn" : "ok";
@@ -360,6 +360,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         { id: "telaio", label: "Numero di telaio", value: m?.telaio },
         { id: "km", label: "Km attuali", type: "number", value: m?.km },
         { id: "scadAssicurazione", label: "Scadenza assicurazione", type: "date", value: m?.scadAssicurazione },
+        { id: "scadBollo", label: "Scadenza bollo", type: "date", value: m?.scadBollo },
         { id: "scadRevisione", label: "Scadenza revisione", type: "date", value: m?.scadRevisione },
         { id: "note", label: "Note", type: "textarea", full: true, value: m?.note },
       ],
@@ -466,7 +467,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const addBtn = (act, label, id = "") => W() ? `<button class="btn pri" data-act="${act}" data-id="${esc(id)}">+ ${esc(label)}</button>` : "";
 
   function vMotoList() {
-    if (!S.moto.length) return `<div class="card empty-big"><h2>Nessuna moto ancora</h2><p>Aggiungi la tua prima moto con le date di assicurazione e revisione: 30 giorni prima di ogni scadenza riceverai una notifica.</p>${addBtn("addMoto", "Aggiungi moto")}</div>`;
+    if (!S.moto.length) return `<div class="card empty-big"><h2>Nessuna moto ancora</h2><p>Aggiungi la tua prima moto con le scadenze di assicurazione, bollo e revisione: le vedrai evidenziate 30 giorni prima e potrai metterle nel calendario.</p>${addBtn("addMoto", "Aggiungi moto")}</div>`;
         const moto = [...S.moto].sort(byNum);
     const urg = urgentSc();
     const alertBox = urg.length ? `<div class="section"><div class="section-h"><h3>Da rinnovare</h3></div><div class="list">${urg.map(s => `<div class="row row-doc" data-act="openMoto" data-id="${esc(s.moto.id)}" style="cursor:pointer">
