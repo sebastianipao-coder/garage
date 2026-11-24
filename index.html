@@ -130,6 +130,9 @@ input[type=search] { padding-left: 14px; }
 .tag { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--fill); border-radius: 6px; padding: 1px 7px; }
 .tag.off { color: var(--bad); background: var(--bad-soft); }
 .moto-card.inactive { opacity: .6; }
+.chk { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--fill); border-radius: 10px; cursor: pointer; }
+.chk input { width: 20px; height: 20px; accent-color: var(--accent); }
+.offline { background: var(--accent-soft); color: var(--accent); }
 .cal-steps { margin: 0; padding-left: 20px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
 .swipe { position: relative; overflow: hidden; border-top: .5px solid var(--line); margin-left: -16px; }
 .swipe:first-child { border-top: 0; }
@@ -260,12 +263,12 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
 <script>
 (() => {
   // ---------- state ----------
-  const COLS = ["moto", "interventi", "documenti", "ricambi"];
-  const S = { moto: [], interventi: [], documenti: [], ricambi: [] };
+  const COLS = ["moto", "interventi", "documenti", "ricambi", "spostamenti"];
+  const S = { moto: [], interventi: [], documenti: [], ricambi: [], spostamenti: [] };
   const loaded = new Set();
   let sb = null, session = null, membro = null, canWrite = true, offline = false, failed = false, setup = false;
   const inviteCode = (location.hash.match(/^#invito-([a-f0-9]{8,64})$/) || [])[1] || null;
-  let mq = "", fSede = "tutte", fStato = "attive";
+  let mq = "", fSede = "tutte", fStato = "attive", fChiavi = "tutte";
   const STATI = ["Attiva", "In officina", "Ferma", "Venduta", "Demolita"];
   const isAttiva = (m) => !["Venduta", "Demolita"].includes(m.stato);
   let view = "moto", motoId = null, q = "", rcSort = "descrizione", repYear = "tutti";
@@ -307,7 +310,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const txt = days < 0 ? `scaduta da ${-days} gg` : days === 0 ? "scade oggi" : days === 1 ? "scade domani" : `tra ${days} gg`;
     return { lvl, txt, days };
   }
-  const allSc = () => S.moto.filter(isAttiva).flatMap(m => SCAD.filter(([k]) => m[k]).map(([k, tipo]) => ({ moto: m, tipo, data: m[k], st: stato(m[k]) }))).sort((a, b) => a.st.days - b.st.days);
+  const scadOf = (m) => SCAD.filter(([k]) => !(k === "scadBollo" && m.bolloEsente));
+  const allSc = () => S.moto.filter(isAttiva).flatMap(m => scadOf(m).filter(([k]) => m[k]).map(([k, tipo]) => ({ moto: m, tipo, data: m[k], st: stato(m[k]) }))).sort((a, b) => a.st.days - b.st.days);
   const urgentSc = () => allSc().filter(s => s.st.lvl !== "ok");
 
   // ---------- modal / forms ----------
@@ -321,6 +325,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         let ctl;
         if (f.type === "select") ctl = `<select id="${id}">${f.options.map(o => `<option${o === v ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
         else if (f.type === "textarea") ctl = `<textarea id="${id}">${esc(v)}</textarea>`;
+        else if (f.type === "checkbox") ctl = `<label class="chk"><input id="${id}" type="checkbox"${v ? " checked" : ""}> ${esc(f.text || "")}</label>`;
         else ctl = `<input id="${id}" type="${f.type || "text"}" value="${esc(v)}"${f.step ? ` step="${f.step}"` : ""}${f.type === "number" ? ' inputmode="decimal" min="0"' : ""}${f.list ? ` list="${id}_l"` : ""}>${f.list ? `<datalist id="${id}_l">${f.list.map(o => `<option value="${esc(o)}"></option>`).join("")}</datalist>` : ""}`;
         return `<div class="field${f.full ? " full" : ""}"><label for="${id}">${esc(f.label)}${f.required ? " *" : ""}</label>${ctl}${f.hint ? `<span class="hint">${esc(f.hint)}</span>` : ""}</div>`;
       }).join("")}</div>
@@ -336,6 +341,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       e.preventDefault();
       const vals = {};
       for (const f of fields) {
+        if (f.type === "checkbox") { vals[f.id] = $("#f_" + f.id).checked; continue; }
         const raw = $("#f_" + f.id).value.trim();
         if (f.required && !raw) { $("#merr").textContent = `Compila il campo "${f.label}".`; $("#f_" + f.id).focus(); return; }
         vals[f.id] = f.type === "number" ? num(raw) : raw;
@@ -359,33 +365,71 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   // ---------- data writes ----------
   const stamp = () => new Date().toISOString();
   const BUCKET = "documenti";
+  const CACHE_KEY = "garage-cache-v1", OUTBOX_KEY = "garage-outbox-v1";
+  const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  let outbox = lsGet(OUTBOX_KEY, []), cachedAt = null, flushing = false;
+  const saveCache = () => lsSet(CACHE_KEY, { at: new Date().toISOString(), user: session?.user?.id || null, S });
+  function loadCache() {
+    const c = lsGet(CACHE_KEY, null);
+    if (!c || !c.S || (c.user && session?.user?.id && c.user !== session.user.id)) return false;
+    COLS.forEach(k => { S[k] = c.S[k] || []; loaded.add(k); });
+    cachedAt = c.at; return true;
+  }
+  const isNetErr = (e) => !navigator.onLine || /fetch|network|load failed|timeout/i.test((e && (e.message || e.toString())) || "");
+  function applyLocal(op) {
+    if (op.kind === "insert") S[op.c] = [...S[op.c].filter(x => x.id !== op.id), { id: op.id, ...op.data }];
+    else if (op.kind === "update") S[op.c] = S[op.c].map(x => x.id === op.id ? { id: op.id, ...op.data } : x);
+    else S[op.c] = S[op.c].filter(x => x.id !== op.id);
+  }
+  async function remote(op) {
+    let r;
+    if (op.kind === "insert") r = await sb.from(op.c).insert({ id: op.id, data: op.data });
+    else if (op.kind === "update") r = await sb.from(op.c).update({ data: op.data }).eq("id", op.id);
+    else r = await sb.from(op.c).delete().eq("id", op.id);
+    if (r.error) throw r.error;
+  }
+  async function run(op) {
+    if (navigator.onLine && !outbox.length) {
+      try { await remote(op); }
+      catch (e) { if (!isNetErr(e)) throw e; outbox.push(op); lsSet(OUTBOX_KEY, outbox); }
+    } else { outbox.push(op); lsSet(OUTBOX_KEY, outbox); if (navigator.onLine) setTimeout(flush, 0); }
+    applyLocal(op); saveCache(); render();
+  }
+  async function flush() {
+    if (flushing || !sb || !session || !navigator.onLine || !outbox.length) return;
+    flushing = true; let sent = 0;
+    try {
+      while (outbox.length && navigator.onLine) {
+        const op = outbox[0];
+        try { await remote(op); sent++; }
+        catch (e) { if (isNetErr(e)) break; toast("Una modifica fatta senza rete non è stata salvata: " + errMsg(e)); }
+        outbox.shift(); lsSet(OUTBOX_KEY, outbox);
+      }
+    } finally { flushing = false; }
+    if (sent) { toast(sent === 1 ? "1 modifica inviata" : `${sent} modifiche inviate`); await Promise.all(COLS.map(c => fetchTable(c).catch(() => {}))); saveCache(); }
+    render();
+  }
   async function fetchTable(c) {
     const { data, error } = await sb.from(c).select("id,data").order("created_at");
     if (error) throw error;
     S[c] = data.map(r => ({ id: r.id, ...(r.data || {}) }));
+    outbox.forEach(op => { if (op.c === c) applyLocal(op); });
     loaded.add(c);
   }
+  const newId = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, ch => { const r = Math.random() * 16 | 0; return (ch === "x" ? r : (r & 3 | 8)).toString(16); }));
   async function save(c, id, data) {
     if (!sb || !session) throw { code: "unavailable" };
     if (id) {
       const ex = S[c].find(x => x.id === id) || {}; const { id: _, ...rest } = ex;
-      const body = { ...rest, ...data, aggiornato: stamp() };
-      const { error } = await sb.from(c).update({ data: body }).eq("id", id);
-      if (error) throw error;
-      S[c] = S[c].map(x => x.id === id ? { id, ...body } : x);
+      await run({ kind: "update", c, id, data: { ...rest, ...data, aggiornato: stamp() } });
     } else {
-      const { data: row, error } = await sb.from(c).insert({ data: { ...data, creato: stamp() } }).select("id,data").single();
-      if (error) throw error;
-      S[c] = [...S[c], { id: row.id, ...row.data }];
+      await run({ kind: "insert", c, id: newId(), data: { ...data, creato: stamp() } });
     }
-    render();
   }
-  async function del(c, id) {
-    const { error } = await sb.from(c).delete().eq("id", id);
-    if (error) throw error;
-    S[c] = S[c].filter(x => x.id !== id);
-    render();
-  }
+  async function del(c, id) { await run({ kind: "delete", c, id }); }
+  window.addEventListener("online", () => { render(); flush(); if (session && membro) COLS.forEach(c => fetchTable(c).then(() => { saveCache(); render(); }).catch(() => {})); });
+  window.addEventListener("offline", render);
   async function removeFile(d) { if (d && d.path) { try { await sb.storage.from(BUCKET).remove([d.path]); } catch (e) {} } }
 
   // ---------- forms per entity ----------
@@ -402,8 +446,11 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         { id: "km", label: "Km attuali", type: "number", value: m?.km },
         { id: "scadAssicurazione", label: "Scadenza assicurazione", type: "date", value: m?.scadAssicurazione },
         { id: "scadBollo", label: "Scadenza bollo", type: "date", value: m?.scadBollo },
+        { id: "bolloEsente", label: "Bollo", type: "checkbox", text: "Esente (es. 50cc)", value: m?.bolloEsente },
         { id: "scadRevisione", label: "Scadenza revisione", type: "date", value: m?.scadRevisione },
         { id: "sede", label: "Sede", value: m?.sede, list: [...new Set(S.moto.map(x => x.sede).filter(Boolean))].sort() },
+        { id: "chiaveScorta", label: "Chiave di scorta", type: "select", options: ["Non so", "Sì", "No"], value: m?.chiaveScorta || "Non so" },
+        { id: "chiaveMaster", label: "Chiave master", type: "select", options: ["Non so", "Sì", "No", "Non serve"], value: m?.chiaveMaster || "Non so" },
         { id: "stato", label: "Stato", type: "select", options: STATI, value: m?.stato || "Attiva", hint: "Venduta e Demolita escono da scadenze e calendario" },
         { id: "note", label: "Note", type: "textarea", full: true, value: m?.note },
       ],
@@ -416,6 +463,10 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         if (v.targa) v.targa = String(v.targa).toUpperCase().trim();
         if (v.telaio) v.telaio = String(v.telaio).toUpperCase().trim();
         if (v.sede) v.sede = String(v.sede).toUpperCase().trim();
+        if (v.chiaveScorta === "Non so") v.chiaveScorta = null;
+        if (v.chiaveMaster === "Non so") v.chiaveMaster = null;
+        if (v.bolloEsente) v.scadBollo = "";
+        if (m && v.sede !== (m.sede || "") && (m.sede || v.sede)) await save("spostamenti", null, { motoId: m.id, da: m.sede || "", a: v.sede || "", data: today(), note: "Modificata dalla scheda", chi: session?.user?.email || "" });
         await save("moto", m?.id, v); toast(m ? "Moto aggiornata" : "Moto aggiunta");
       },
     });
@@ -462,6 +513,26 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       },
     });
   }
+  function formSposta(id) {
+    const m = getMoto(id); if (!m) return;
+    const sedi = [...new Set(S.moto.map(x => x.sede).filter(Boolean))].sort();
+    openForm({
+      title: `Sposta ${m.numero != null ? "N. " + m.numero + " " : ""}${motoName(m)}`,
+      submit: "Sposta",
+      fields: [
+        { id: "a", label: "Nuova sede", required: true, list: sedi.filter(s => s !== m.sede), hint: `Sede attuale: ${m.sede || "non indicata"}` },
+        { id: "data", label: "Data", type: "date", required: true, value: today() },
+        { id: "note", label: "Note", full: true, hint: "Facoltativo, es. motivo dello spostamento" },
+      ],
+      onSubmit: async (v) => {
+        const a = String(v.a).toUpperCase().trim();
+        if (a === (m.sede || "")) throw { userMsg: "La moto è già in questa sede." };
+        await save("spostamenti", null, { motoId: id, da: m.sede || "", a, data: v.data, note: v.note, chi: session?.user?.email || "" });
+        await save("moto", id, { sede: a });
+        toast(`Spostata in ${a}`);
+      },
+    });
+  }
   function formRc(r) {
     openForm({
       title: r ? "Modifica ricambio" : "Nuovo ricambio",
@@ -477,6 +548,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     });
   }
   function uploadDoc(motoIdX) {
+    if (!navigator.onLine) { toast("Senza rete non puoi caricare documenti: riprova quando torna la connessione."); return; }
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "image/*,application/pdf,.txt,.csv";
     inp.onchange = async () => {
@@ -495,6 +567,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     inp.click();
   }
   async function openDoc(id) {
+    if (!navigator.onLine) { toast("Senza rete non puoi aprire i documenti."); return; }
     const d = S.documenti.find(x => x.id === id); if (!d) return;
     const w = window.open("", "_blank");
     const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(d.path, 3600);
@@ -540,6 +613,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const moto = [...S.moto].sort(byNum).filter(m =>
       (fSede === "tutte" || (m.sede || "") === fSede) &&
       (fStato === "tutte" || (fStato === "attive" ? isAttiva(m) : (m.stato || "Attiva") === fStato)) &&
+      (fChiavi === "tutte" || (fChiavi === "noscorta" ? m.chiaveScorta === "No" : m.chiaveMaster === "No")) &&
       (!qn || [m.numero, m.targa, m.telaio, m.marca, m.modello, m.sede, "n" + m.numero].some(x => String(x ?? "").toLowerCase().replace(/\s+/g, "").includes(qn))));
     const urg = urgentSc();
     const keyOf = (t) => (SCAD.find(([, l]) => l === t) || [""])[0];
@@ -555,14 +629,15 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     <div class="filters">
       <input type="search" id="mq" placeholder="Cerca per targa, numero o modello" value="${esc(mq)}" aria-label="Cerca moto">
       <select id="fsede" aria-label="Filtra per sede"><option value="tutte">Tutte le sedi</option>${sedi.map(s => `<option${s === fSede ? " selected" : ""}>${esc(s)}</option>`).join("")}</select>
+      <select id="fchiavi" aria-label="Filtra per chiavi"><option value="tutte"${fChiavi === "tutte" ? " selected" : ""}>Tutte le chiavi</option><option value="noscorta"${fChiavi === "noscorta" ? " selected" : ""}>Senza chiave di scorta</option><option value="nomaster"${fChiavi === "nomaster" ? " selected" : ""}>Senza chiave master</option></select>
       <select id="fstato" aria-label="Filtra per stato">${[["attive", "Solo attive"], ["tutte", "Tutti gli stati"], ...STATI.map(s => [s, s])].map(([v, l]) => `<option value="${esc(v)}"${v === fStato ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>
     </div>
     ${moto.length ? "" : `<div class="card empty">Nessuna moto corrisponde alla ricerca.</div>`}
     <div class="grid-moto">${moto.map(m => {
       return `<button class="moto-card${isAttiva(m) ? "" : " inactive"}" data-act="openMoto" data-id="${esc(m.id)}">
-        <div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${numTag(m).replace('class="nr"', 'class="nr" style="margin:0"')}${m.sede ? `<span class="tag">${esc(m.sede)}</span>` : ""}${m.stato && m.stato !== "Attiva" ? `<span class="tag${isAttiva(m) ? "" : " off"}">${esc(m.stato)}</span>` : ""}</div><h3 style="margin-top:6px">${esc(motoName(m))}</h3><div class="sub">${[m.anno, m.targa].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div>
+        <div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${numTag(m).replace('class="nr"', 'class="nr" style="margin:0"')}${m.sede ? `<span class="tag">${esc(m.sede)}</span>` : ""}${m.stato && m.stato !== "Attiva" ? `<span class="tag${isAttiva(m) ? "" : " off"}">${esc(m.stato)}</span>` : ""}${m.chiaveScorta === "No" ? `<span class="tag off">No scorta</span>` : ""}${m.chiaveMaster === "No" ? `<span class="tag off">No master</span>` : ""}</div><h3 style="margin-top:6px">${esc(motoName(m))}</h3><div class="sub">${[m.anno, m.targa].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div>
         <div class="kv"><div><span>Km</span><b class="num">${m.km != null ? fmtN(m.km) : "–"}</b></div><div><span>Spesa totale</span><b class="num">${fmtE(spesa(m.id))}</b></div></div>
-        <div class="scrow">${!isAttiva(m) ? `<span class="pill neutral">${esc(m.stato)}: scadenze non monitorate</span>` : SCAD.map(([k, t]) => m[k] ? `<span class="pill ${stato(m[k]).lvl}">${t}: ${esc(stato(m[k]).txt)}</span>` : `<span class="pill neutral">${t}: non inserita</span>`).join("")}</div>
+        <div class="scrow">${!isAttiva(m) ? `<span class="pill neutral">${esc(m.stato)}: scadenze non monitorate</span>` : scadOf(m).map(([k, t]) => m[k] ? `<span class="pill ${stato(m[k]).lvl}">${t}: ${esc(stato(m[k]).txt)}</span>` : `<span class="pill neutral">${t}: non inserita</span>`).join("")}</div>
       </button>`;
     }).join("")}</div>`;
   }
@@ -581,13 +656,21 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         <div><span>Anno</span><b class="num">${esc(m.anno ?? "–")}</b></div>
         <div><span>Targa</span><b>${esc(m.targa || "–")}</b></div>
         <div><span>Telaio</span><b>${esc(m.telaio || "–")}</b></div>
+        <div><span>Chiave scorta</span><b${m.chiaveScorta === "No" ? ' style="color:var(--bad)"' : ""}>${esc(m.chiaveScorta || "Non so")}</b></div>
+        <div><span>Chiave master</span><b${m.chiaveMaster === "No" ? ' style="color:var(--bad)"' : ""}>${esc(m.chiaveMaster || "Non so")}</b></div>
         <div><span>Km attuali</span><b class="num">${m.km != null ? fmtN(m.km) : "–"}</b></div>
         <div><span>Spesa totale</span><b class="num">${fmtE(tot)}</b></div>
       </div>
-      <div class="kv" style="align-items:flex-end">${SCAD.map(([k, t]) => `<div><span>${t}</span><b>${m[k] ? esc(fmtD(m[k])) : "–"}</b>${m[k] ? `<span class="pill ${stato(m[k]).lvl}" style="margin-top:4px;align-self:flex-start">${esc(stato(m[k]).txt)}</span>${W() ? `<button class="back" style="font-size:14px;margin-top:4px;align-self:flex-start" data-act="renew" data-id="${esc(m.id)}" data-key="${k}">Rinnova</button>` : ""}` : (W() ? `<button class="back" style="font-size:14px;margin-top:2px" data-act="editMoto" data-id="${esc(m.id)}">Inserisci data</button>` : "")}</div>`).join("")}${SCAD.some(([k]) => m[k]) ? `<div><button class="btn sm" data-act="icsMoto" data-id="${esc(m.id)}">Aggiungi al calendario</button></div>` : ""}</div>
+      <div class="kv" style="align-items:flex-end">${scadOf(m).map(([k, t]) => `<div><span>${t}</span><b>${m[k] ? esc(fmtD(m[k])) : "–"}</b>${m[k] ? `<span class="pill ${stato(m[k]).lvl}" style="margin-top:4px;align-self:flex-start">${esc(stato(m[k]).txt)}</span>${W() ? `<button class="back" style="font-size:14px;margin-top:4px;align-self:flex-start" data-act="renew" data-id="${esc(m.id)}" data-key="${k}">Rinnova</button>` : ""}` : (W() ? `<button class="back" style="font-size:14px;margin-top:2px" data-act="editMoto" data-id="${esc(m.id)}">Inserisci data</button>` : "")}</div>`).join("")}${m.bolloEsente ? `<div><span>Bollo</span><b>Esente</b></div>` : ""}${scadOf(m).some(([k]) => m[k]) ? `<div><button class="btn sm" data-act="icsMoto" data-id="${esc(m.id)}">Aggiungi al calendario</button></div>` : ""}</div>
       ${m.note ? `<div style="color:var(--muted);white-space:pre-wrap">${esc(m.note)}</div>` : ""}
     </div>
 
+
+    <div class="section">
+      <div class="section-h"><h3>Sedi e spostamenti</h3>${W() && isAttiva(m) ? `<button class="btn sm" data-act="sposta" data-id="${esc(m.id)}">Sposta a…</button>` : ""}</div>
+      <div class="list">${(() => { const sp = S.spostamenti.filter(x => x.motoId === m.id).sort((a, b) => (b.data || "").localeCompare(a.data || "") || (b.creato || "").localeCompare(a.creato || ""));
+        return `<div class="row row-doc"><div><b>Sede attuale: ${esc(m.sede || "non indicata")}</b></div><div></div></div>` + sp.map(x => `<div class="row row-doc"><div>${esc(x.da || "–")} → <b>${esc(x.a || "–")}</b><div class="meta">${esc(fmtD(x.data))}${x.chi ? " · " + esc(x.chi) : ""}${x.note ? " · " + esc(x.note) : ""}</div></div><div class="acts">${W() ? `<button class="btn sm ghost danger" data-act="delSposta" data-id="${esc(x.id)}">Elimina</button>` : ""}</div></div>`).join(""); })()}</div>
+    </div>
 
     <div class="section">
       <div class="section-h"><h3>Storico manutenzione</h3>${W() ? `<button class="btn sm" data-act="addInt" data-id="${esc(m.id)}">+ Intervento</button>` : ""}</div>
@@ -694,9 +777,10 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     if (!session) { $("#sync").textContent = inviteCode ? "Invito" : "Accedi per continuare"; if (!$("#lf")) (inviteCode ? renderSignup() : renderLogin()); return; }
     if (membro === null) { $("#sync").textContent = "Verifica accesso…"; $("#app").innerHTML = `<div class="card empty-big"><p>Verifica dell'accesso…</p></div>`; return; }
     if (membro === false) { nav.hidden = true; $("#sync").textContent = "Accesso non abilitato"; $("#app").innerHTML = `<div class="card login"><h2>Account non abilitato</h2><p>Il tuo account esiste ma non è ancora abilitato al garage. Chiedi a chi gestisce l'app un nuovo link di invito e registrati da lì, oppure di abilitarti.</p></div>`; return; }
-    $("#sync").textContent = failed ? "Dati non disponibili" : ready ? "Dati sincronizzati" : "Caricamento…";
+    $("#sync").textContent = !navigator.onLine ? "Senza rete" : outbox.length ? "Invio modifiche…" : failed ? "Dati non disponibili" : ready ? "Dati sincronizzati" : "Caricamento…";
     let notice = "";
-    if (failed) notice = `<div class="note">Non riesco a leggere i dati. Controlla la connessione e ricarica la pagina.</div>`;
+    if (!navigator.onLine || outbox.length) notice = `<div class="note offline">${!navigator.onLine ? "Sei senza rete: vedi i dati salvati sul telefono" + (cachedAt ? " (aggiornati al " + new Date(cachedAt).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) + ")" : "") + ". Puoi continuare a modificare." : ""}${outbox.length ? ` ${outbox.length === 1 ? "1 modifica" : outbox.length + " modifiche"} in attesa di invio.` : ""}</div>`;
+    else if (failed) notice = `<div class="note">Non riesco a leggere i dati. Controlla la connessione e ricarica la pagina.</div>`;
     let body;
     if (!ready && !failed) body = `<div class="card empty-big"><p>Caricamento dei dati…</p></div>`;
     else if (view === "moto") { const m = motoId && getMoto(motoId); body = m ? vMotoDetail(m) : vMotoList(); }
@@ -715,7 +799,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     backList: () => { motoId = null; render(); },
     editMoto: (id) => formMoto(getMoto(id)),
     delMoto: (id) => openConfirm(`Eliminare ${motoName(getMoto(id))}?`, "Elimina moto", async () => {
-      for (const c of ["interventi", "documenti"]) for (const x of S[c].filter(x => x.motoId === id)) { if (c === "documenti") await removeFile(x); await del(c, x.id); }
+      for (const c of ["interventi", "documenti", "spostamenti"]) for (const x of S[c].filter(x => x.motoId === id)) { if (c === "documenti") await removeFile(x); await del(c, x.id); }
       await del("moto", id); motoId = null; toast("Moto eliminata");
     }),
     addInt: (id) => formInt(id),
@@ -724,6 +808,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     upDoc: (id) => uploadDoc(id),
     openDoc: (id) => openDoc(id),
     renew: (id, el) => formRinnova(id, el.dataset.key),
+    sposta: (id) => formSposta(id),
+    delSposta: (id) => openConfirm("Eliminare questo spostamento dallo storico?", "Elimina", async () => { await del("spostamenti", id); toast("Spostamento eliminato"); }),
     icsMoto: (id) => downloadIcs(allSc().filter(s => s.moto.id === id), `scadenze-moto-${getMoto(id)?.numero ?? "x"}.ics`),
     icsAll: () => downloadIcs(allSc(), "scadenze-moto.ics"),
     calendario: () => openCalendario(),
@@ -794,6 +880,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     if (e.target.id === "rcsort") { rcSort = e.target.value; render(); }
     if (e.target.id === "fsede") { fSede = e.target.value; render(); }
     if (e.target.id === "fstato") { fStato = e.target.value; render(); }
+    if (e.target.id === "fchiavi") { fChiavi = e.target.value; render(); }
     if (e.target.id === "repyear") { repYear = e.target.value; render(); }
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#ov")) closeModal(); });
@@ -941,23 +1028,26 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   async function checkMembro() {
     membro = null; render();
     const { data, error } = await sb.rpc("is_membro");
-    membro = error ? false : !!data;
+    if (error && isNetErr(error)) membro = lsGet("garage-membro", false);
+    else { membro = error ? false : !!data; lsSet("garage-membro", membro); }
     if (inviteCode && membro) { try { history.replaceState(null, "", location.pathname); } catch (e) {} }
     return membro;
   }
   async function loadAll() {
     if (!(await checkMembro())) { render(); return; }
-    failed = false; loaded.clear(); render();
-    try { await Promise.all(COLS.map(fetchTable)); } catch (e) { failed = true; }
+    failed = false; loaded.clear();
+    const hadCache = loadCache(); render();
+    try { await Promise.all(COLS.map(fetchTable)); cachedAt = null; saveCache(); flush(); }
+    catch (e) { if (!hadCache) failed = true; }
     render();
     if (channel) sb.removeChannel(channel);
     channel = sb.channel("garage");
     COLS.forEach(c => channel.on("postgres_changes", { event: "*", schema: "public", table: c }, () => {
-      clearTimeout(pending[c]); pending[c] = setTimeout(() => fetchTable(c).then(render).catch(() => {}), 300);
+      clearTimeout(pending[c]); pending[c] = setTimeout(() => fetchTable(c).then(() => { saveCache(); render(); }).catch(() => {}), 300);
     }));
     channel.subscribe();
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && session) COLS.forEach(c => fetchTable(c).then(render).catch(() => {})); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && session && membro && navigator.onLine) { flush(); COLS.forEach(c => fetchTable(c).then(() => { saveCache(); render(); }).catch(() => {})); } });
   async function init() {
     const cfg = window.GARAGE_CONFIG || {};
     if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || /INSERISCI/.test(cfg.SUPABASE_URL + cfg.SUPABASE_ANON_KEY) || !window.supabase) { setup = true; render(); return; }
@@ -966,12 +1056,13 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     session = data.session;
     sb.auth.onAuthStateChange((ev, s) => {
       const was = !!session; session = s;
-      if (!s) { membro = null; if (channel) { sb.removeChannel(channel); channel = null; } COLS.forEach(c => S[c] = []); loaded.clear(); render(); }
+      if (!s) { membro = null; try { localStorage.removeItem(CACHE_KEY); localStorage.removeItem("garage-membro"); } catch (e) {} if (channel) { sb.removeChannel(channel); channel = null; } COLS.forEach(c => S[c] = []); loaded.clear(); render(); }
       else if (!was) loadAll();
     });
     if (session) loadAll(); else render();
   }
   init();
+  if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 })();
 </script>
 </body>
