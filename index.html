@@ -130,6 +130,12 @@ input[type=search] { padding-left: 14px; }
 .tag { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--fill); border-radius: 6px; padding: 1px 7px; }
 .tag.off { color: var(--bad); background: var(--bad-soft); }
 .moto-card.inactive { opacity: .6; }
+.swipe.card-swipe { margin-left: 0; border-top: 0; border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.swipe.card-swipe .swipe-acts button { width: 104px; border-radius: 0 16px 16px 0; }
+.swipe.card-swipe .swipe-right-bg { border-radius: 16px; }
+.moto-card[data-swipe] { position: relative; touch-action: pan-y; transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .15s; width: 100%; height: 100%; -webkit-user-select: none; user-select: none; }
+.tag.sede-tag { color: var(--accent); background: var(--accent-soft); cursor: pointer; }
+.tag.sede-tag:hover { filter: brightness(1.1); }
 .chk { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--fill); border-radius: 10px; cursor: pointer; }
 .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
 .offline { background: var(--accent-soft); color: var(--accent); }
@@ -520,12 +526,14 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       title: `Sposta ${m.numero != null ? "N. " + m.numero + " " : ""}${motoName(m)}`,
       submit: "Sposta",
       fields: [
-        { id: "a", label: "Nuova sede", required: true, list: sedi.filter(s => s !== m.sede), hint: `Sede attuale: ${m.sede || "non indicata"}` },
+        { id: "a", label: `Sposta da ${m.sede || "–"} a`, type: "select", options: ["Scegli il punto vendita…", ...sedi.filter(s => s !== m.sede)] },
+        { id: "nuova", label: "Oppure nuovo punto vendita", hint: "Solo se non è nell'elenco" },
         { id: "data", label: "Data", type: "date", required: true, value: today() },
         { id: "note", label: "Note", full: true, hint: "Facoltativo, es. motivo dello spostamento" },
       ],
       onSubmit: async (v) => {
-        const a = String(v.a).toUpperCase().trim();
+        const a = String(v.nuova || (v.a.startsWith("Scegli") ? "" : v.a)).toUpperCase().trim();
+        if (!a) throw { userMsg: "Scegli il punto vendita di destinazione." };
         if (a === (m.sede || "")) throw { userMsg: "La moto è già in questa sede." };
         await save("spostamenti", null, { motoId: id, da: m.sede || "", a, data: v.data, note: v.note, chi: session?.user?.email || "" });
         await save("moto", id, { sede: a });
@@ -634,11 +642,12 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     </div>
     ${moto.length ? "" : `<div class="card empty">Nessuna moto corrisponde alla ricerca.</div>`}
     <div class="grid-moto">${moto.map(m => {
-      return `<button class="moto-card${isAttiva(m) ? "" : " inactive"}" data-act="openMoto" data-id="${esc(m.id)}">
-        <div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${numTag(m).replace('class="nr"', 'class="nr" style="margin:0"')}${m.sede ? `<span class="tag">${esc(m.sede)}</span>` : ""}${m.stato && m.stato !== "Attiva" ? `<span class="tag${isAttiva(m) ? "" : " off"}">${esc(m.stato)}</span>` : ""}${m.chiaveScorta === "No" ? `<span class="tag off">No scorta</span>` : ""}${m.chiaveMaster === "No" ? `<span class="tag off">No master</span>` : ""}</div><h3 style="margin-top:6px">${esc(motoName(m))}</h3><div class="sub">${[m.anno, m.targa].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div>
+      const canMove = W() && isAttiva(m);
+      return `<div class="swipe card-swipe">${canMove ? `<div class="swipe-right-bg">Sposta</div><div class="swipe-acts"><button class="sa-renew" data-act="sposta" data-id="${esc(m.id)}">Sposta</button></div>` : ""}<button class="moto-card${isAttiva(m) ? "" : " inactive"}" data-act="openMoto" data-id="${esc(m.id)}"${canMove ? ` data-swipe="1" data-full="sposta" data-open="-104"` : ""}>
+        <div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${numTag(m).replace('class="nr"', 'class="nr" style="margin:0"')}${m.sede || canMove ? (canMove ? `<span class="tag sede-tag" data-act="sposta" data-id="${esc(m.id)}" title="Sposta in un altro punto vendita">${esc(m.sede || "Sede?")} ⇄</span>` : `<span class="tag">${esc(m.sede)}</span>`) : ""}${m.stato && m.stato !== "Attiva" ? `<span class="tag${isAttiva(m) ? "" : " off"}">${esc(m.stato)}</span>` : ""}${m.chiaveScorta === "No" ? `<span class="tag off">No scorta</span>` : ""}${m.chiaveMaster === "No" ? `<span class="tag off">No master</span>` : ""}</div><h3 style="margin-top:6px">${esc(motoName(m))}</h3><div class="sub">${[m.anno, m.targa].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div></div>
         <div class="kv"><div><span>Km</span><b class="num">${m.km != null ? fmtN(m.km) : "–"}</b></div><div><span>Spesa totale</span><b class="num">${fmtE(spesa(m.id))}</b></div></div>
         <div class="scrow">${!isAttiva(m) ? `<span class="pill neutral">${esc(m.stato)}: scadenze non monitorate</span>` : scadOf(m).map(([k, t]) => m[k] ? `<span class="pill ${stato(m[k]).lvl}">${t}: ${esc(stato(m[k]).txt)}</span>` : `<span class="pill neutral">${t}: non inserita</span>`).join("")}</div>
-      </button>`;
+      </button></div>`;
     }).join("")}</div>`;
   }
 
@@ -832,15 +841,16 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     finally { busy.delete(id); }
   }
   // ---------- swipe (come in Mail su iPhone) ----------
-  const OPEN_X = -168;
+  const openX = (row) => Number(row.dataset.open || -168);
   let sw = null;
   const snap = (row, x) => { row.style.transition = ""; row.style.transform = x ? `translateX(${x}px)` : ""; row._open = x < 0; row.parentElement.classList.toggle("right", false); };
-  const closeOthers = (keep) => document.querySelectorAll(".swipe-row").forEach(r => { if (r !== keep && r._open) snap(r, 0); });
+  const closeOthers = (keep) => document.querySelectorAll("[data-swipe]").forEach(r => { if (r !== keep && r._open) snap(r, 0); });
+  const swipeAction = (row) => { if (row.dataset.full === "sposta") formSposta(row.dataset.id); else formRinnova(row.dataset.id, row.dataset.key); };
   document.addEventListener("pointerdown", (e) => {
-    const row = e.target.closest(".swipe-row");
+    const row = e.target.closest("[data-swipe]");
     if (!row || row.dataset.swipe !== "1" || (e.pointerType === "mouse" && e.button !== 0)) return;
     closeOthers(row);
-    sw = { row, x: e.clientX, y: e.clientY, base: row._open ? OPEN_X : 0, t: row._open ? OPEN_X : 0, dragging: false, id: e.pointerId };
+    sw = { row, x: e.clientX, y: e.clientY, base: row._open ? openX(row) : 0, t: row._open ? openX(row) : 0, dragging: false, id: e.pointerId };
   });
   document.addEventListener("pointermove", (e) => {
     if (!sw || e.pointerId !== sw.id) return;
@@ -860,15 +870,15 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const { row, dragging, t } = sw; sw = null;
     if (!dragging) return;
     row._justDragged = true; setTimeout(() => { row._justDragged = false; }, 80);
-    if (t > 90 || t < -220) { snap(row, 0); formRinnova(row.dataset.id, row.dataset.key); }
-    else if (t < -60) snap(row, OPEN_X);
+    if (t > 90 || t < -220) { snap(row, 0); swipeAction(row); }
+    else if (t < -50) snap(row, openX(row));
     else snap(row, 0);
   };
   document.addEventListener("pointerup", endSwipe);
   document.addEventListener("pointercancel", (e) => { if (sw && sw.row) snap(sw.row, 0); sw = null; });
 
   document.addEventListener("click", (e) => {
-    const srow = e.target.closest(".swipe-row");
+    const srow = e.target.closest("[data-swipe]");
     if (srow && srow._justDragged) { e.preventDefault(); return; }
     if (srow && srow._open && !e.target.closest(".renew-desk")) { e.preventDefault(); snap(srow, 0); return; }
     if (!e.target.closest(".swipe")) closeOthers(null);
