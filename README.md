@@ -6,7 +6,7 @@ Web app per gestire le proprie moto e il magazzino ricambi, utilizzabile da qual
 
 - **Moto**: scheda con numero, sede, stato (attiva, in officina, ferma, venduta, demolita), marca, modello, anno, targa, telaio e km; sede, stato, chiavi (scorta e master) e storico degli spostamenti tra sedi; ricerca e filtri per sede, stato e chiavi; bollo esente per i 50cc; scadenze di assicurazione, bollo e revisione evidenziate a 30 giorni; storico manutenzione con costi; documenti allegati (libretto, fatture, manuali).
 - **Calendario**: il pulsante "Calendario" offre un abbonamento che si aggiorna da solo (iPhone, Google Calendar); "Aggiungi al calendario" scarica invece un file `.ics` con le scadenze e due promemoria (30 e 7 giorni prima), da aprire con il calendario di iPhone, Android o computer.
-- **Ricambi**: codice, descrizione, quantità, prezzo e fornitore, con ricerca e valore totale del magazzino.
+- **Ricambi**: nome libero, codice, quantità, prezzo e fornitore, con ricerca e valore totale del magazzino.
 - **Report**: spese per moto, per tipo di intervento e per anno; valore del magazzino per fornitore.
 
 ## Come è fatta
@@ -35,3 +35,7 @@ Web app per gestire le proprie moto e il magazzino ricambi, utilizzabile da qual
 ## Senza rete
 
 L'app si apre e mostra i dati anche senza connessione (copia salvata sul dispositivo). Le modifiche fatte offline restano in attesa e vengono inviate da sole quando torna la rete. Caricare o aprire documenti richiede la connessione.
+
+## Ricambi e riparazioni
+
+Quando registri un intervento puoi indicare i ricambi usati (dal magazzino) e le quantità: vengono scalati automaticamente. Modificando l'intervento il magazzino si corregge; eliminandolo i ricambi tornano disponibili. Se non indichi il costo, viene calcolato dai prezzi dei ricambi usati.

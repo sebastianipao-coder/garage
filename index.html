@@ -136,6 +136,13 @@ input[type=search] { padding-left: 14px; }
 .moto-card[data-swipe] { position: relative; touch-action: pan-y; transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .15s; width: 100%; height: 100%; -webkit-user-select: none; user-select: none; }
 .tag.sede-tag { color: var(--accent); background: var(--accent-soft); cursor: pointer; }
 .tag.sede-tag:hover { filter: brightness(1.1); }
+.rp { display: flex; flex-direction: column; gap: 8px; }
+.rp-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--fill); border-radius: 10px; }
+.rp-item .n { flex: 1; min-width: 0; }
+.rp-item .n small { color: var(--muted); display: block; }
+.rp-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.rp-add select { flex: 1 1 180px; min-width: 0; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--fill); }
+.rp-add input { width: 70px; padding: 10px 12px; border: 0; border-radius: 10px; background: var(--fill); }
 .chk { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: var(--fill); border-radius: 10px; cursor: pointer; }
 .chk input { width: 20px; height: 20px; accent-color: var(--accent); }
 .offline { background: var(--accent-soft); color: var(--accent); }
@@ -296,6 +303,8 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const num = (v) => (v === "" || v == null || isNaN(Number(v))) ? null : Number(v);
   const motoName = (m) => m ? `${m.marca || ""} ${m.modello || ""}`.trim() || "Moto senza nome" : "Moto eliminata";
   const getMoto = (id) => S.moto.find(m => m.id === id);
+  const rcName = (r) => (r && (r.nome || r.descrizione)) || "Ricambio senza nome";
+  const getRc = (id) => S.ricambi.find(r => r.id === id);
   const nextNum = () => S.moto.reduce((a, m) => Math.max(a, Number(m.numero) || 0), 0) + 1;
   const numTag = (m) => m && m.numero != null ? `<span class="nr">N. ${esc(m.numero)}</span>` : "";
   const byNum = (a, b) => ((a.numero ?? 1e9) - (b.numero ?? 1e9)) || motoName(a).localeCompare(motoName(b));
@@ -332,6 +341,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
         let ctl;
         if (f.type === "select") ctl = `<select id="${id}">${f.options.map(o => `<option${o === v ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
         else if (f.type === "textarea") ctl = `<textarea id="${id}">${esc(v)}</textarea>`;
+        else if (f.type === "custom") ctl = f.html();
         else if (f.type === "checkbox") ctl = `<label class="chk"><input id="${id}" type="checkbox"${v ? " checked" : ""}> ${esc(f.text || "")}</label>`;
         else ctl = `<input id="${id}" type="${f.type || "text"}" value="${esc(v)}"${f.step ? ` step="${f.step}"` : ""}${f.type === "number" ? ' inputmode="decimal" min="0"' : ""}${f.list ? ` list="${id}_l"` : ""}>${f.list ? `<datalist id="${id}_l">${f.list.map(o => `<option value="${esc(o)}"></option>`).join("")}</datalist>` : ""}`;
         return `<div class="field${f.full ? " full" : ""}"><label for="${id}">${esc(f.label)}${f.required ? " *" : ""}</label>${ctl}${f.hint ? `<span class="hint">${esc(f.hint)}</span>` : ""}</div>`;
@@ -343,12 +353,14 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     modalOpened();
     $("#mcancel").onclick = closeModal;
     $("#ov").addEventListener("mousedown", e => { if (e.target.id === "ov") closeModal(); });
+    fields.forEach(f => f.mount && f.mount());
     const first = $("#mf input, #mf select, #mf textarea"); if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
     $("#mf").onsubmit = async (e) => {
       e.preventDefault();
       const vals = {};
       for (const f of fields) {
         if (f.type === "checkbox") { vals[f.id] = $("#f_" + f.id).checked; continue; }
+        if (f.type === "custom") { vals[f.id] = f.read(); continue; }
         const raw = $("#f_" + f.id).value.trim();
         if (f.required && !raw) { $("#merr").textContent = `Compila il campo "${f.label}".`; $("#f_" + f.id).focus(); return; }
         vals[f.id] = f.type === "number" ? num(raw) : raw;
@@ -478,22 +490,79 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       },
     });
   }
+  function ricambiPicker(iniziali) {
+    let sel = (iniziali || []).map(x => ({ id: x.id, qta: Number(x.qta) || 1, nome: x.nome, prezzo: x.prezzo }));
+    const giaUsati = Object.fromEntries((iniziali || []).map(x => [x.id, Number(x.qta) || 0]));
+    const disp = (id) => (Number(getRc(id)?.quantita) || 0) + (giaUsati[id] || 0);
+    const draw = () => {
+      $("#rp_list").innerHTML = sel.length ? sel.map((x, i) => {
+        const r = getRc(x.id);
+        return `<div class="rp-item"><div class="n"><b>${esc(r ? rcName(r) : x.nome)}</b><small>${r ? `${disp(x.id)} disponibili` : "non più in magazzino"}${(r?.prezzo ?? x.prezzo) != null ? " · " + fmtE(r?.prezzo ?? x.prezzo) + " cad." : ""}</small></div>
+          <div class="qty"><button type="button" data-rp="-" data-i="${i}" aria-label="Diminuisci">−</button><span>${x.qta}</span><button type="button" data-rp="+" data-i="${i}" aria-label="Aumenta">+</button></div>
+          <button type="button" class="btn sm ghost danger" data-rp="x" data-i="${i}">Togli</button></div>`;
+      }).join("") : `<div class="hint" style="color:var(--muted);font-size:13px">Nessun ricambio usato.</div>`;
+    };
+    return {
+      id: "ricambi", label: "Ricambi usati", type: "custom", full: true,
+      html: () => {
+        const opts = [...S.ricambi].sort((a, b) => rcName(a).localeCompare(rcName(b))).map(r => `<option value="${esc(r.id)}">${esc(rcName(r))}${r.codice ? " (" + esc(r.codice) + ")" : ""} · ${fmtN(disp(r.id))} disp.</option>`).join("");
+        return `<div class="rp"><div id="rp_list"></div>${S.ricambi.length ? `<div class="rp-add"><select id="rp_sel" aria-label="Scegli il ricambio"><option value="">Scegli un ricambio dal magazzino…</option>${opts}</select><input id="rp_q" type="number" min="1" value="1" inputmode="numeric" aria-label="Quantità"><button type="button" class="btn sm" id="rp_btn">Aggiungi</button></div>` : `<div class="hint" style="color:var(--muted);font-size:13px">Il magazzino è vuoto: aggiungi prima i ricambi nella sezione Ricambi.</div>`}</div>`;
+      },
+      mount: () => {
+        draw();
+        $("#rp_list").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-rp]"); if (!b) return;
+          const i = Number(b.dataset.i), x = sel[i];
+          if (b.dataset.rp === "x") sel.splice(i, 1);
+          else if (b.dataset.rp === "+") { if (x.qta < disp(x.id)) x.qta++; else toast(`Disponibili solo ${disp(x.id)}`); }
+          else if (x.qta > 1) x.qta--;
+          draw();
+        });
+        if ($("#rp_btn")) $("#rp_btn").onclick = () => {
+          const id = $("#rp_sel").value, q = Math.max(1, Number($("#rp_q").value) || 1);
+          if (!id) { toast("Scegli un ricambio dall'elenco"); return; }
+          const ex = sel.find(x => x.id === id), tot = (ex ? ex.qta : 0) + q;
+          if (tot > disp(id)) { toast(`Di "${rcName(getRc(id))}" ne hai solo ${disp(id)} in magazzino`); return; }
+          if (ex) ex.qta = tot; else sel.push({ id, qta: q });
+          $("#rp_sel").value = ""; $("#rp_q").value = 1; draw();
+        };
+      },
+      read: () => sel.map(x => ({ id: x.id, qta: x.qta })),
+    };
+  }
   function formInt(motoIdX, it) {
     const m = getMoto(motoIdX);
     openForm({
       title: it ? "Modifica intervento" : `Nuovo intervento · ${motoName(m)}`,
       fields: [
         { id: "data", label: "Data", type: "date", required: true, value: it?.data || today() },
-        { id: "tipo", label: "Tipo", type: "select", options: TIPI_INT, value: it?.tipo || "Tagliando" },
+        { id: "tipo", label: "Tipo di intervento", required: true, value: it?.tipo || "", list: [...new Set([...TIPI_INT, ...S.interventi.map(x => x.tipo).filter(Boolean)])], hint: "Scegli dai suggerimenti o scrivi quello che vuoi" },
         { id: "km", label: "Km al momento", type: "number", value: it?.km ?? m?.km },
-        { id: "costo", label: "Costo (€)", type: "number", step: "0.01", value: it?.costo },
+        { id: "costo", label: "Costo totale (€)", type: "number", step: "0.01", value: it?.costo, hint: "Se lo lasci vuoto uso il costo dei ricambi usati" },
+        ricambiPicker(it?.ricambi),
         { id: "descrizione", label: "Cosa è stato fatto", type: "textarea", full: true, value: it?.descrizione },
         { id: "officina", label: "Officina / chi l'ha fatto", full: true, value: it?.officina },
       ],
       onSubmit: async (v) => {
-        await save("interventi", it?.id, { ...v, motoId: motoIdX });
+        const nuovi = v.ricambi || [], vecchi = it?.ricambi || [];
+        const delta = {};
+        nuovi.forEach(x => { delta[x.id] = (delta[x.id] || 0) + x.qta; });
+        vecchi.forEach(x => { delta[x.id] = (delta[x.id] || 0) - (Number(x.qta) || 0); });
+        for (const [rid, d] of Object.entries(delta)) {
+          const r = getRc(rid);
+          if (r && d > (Number(r.quantita) || 0)) throw { userMsg: `Di "${rcName(r)}" ne hai solo ${fmtN(r.quantita)} in magazzino.` };
+        }
+        const usati = nuovi.map(x => { const r = getRc(x.id), old = vecchi.find(o => o.id === x.id); return { id: x.id, nome: r ? rcName(r) : old?.nome || "", codice: r?.codice || old?.codice || "", qta: x.qta, prezzo: r?.prezzo ?? old?.prezzo ?? null }; });
+        const costoRic = usati.reduce((a, x) => a + (Number(x.prezzo) || 0) * x.qta, 0);
+        if (v.costo == null && costoRic) v.costo = Math.round(costoRic * 100) / 100;
+        await save("interventi", it?.id, { ...v, ricambi: usati, motoId: motoIdX });
+        for (const [rid, d] of Object.entries(delta)) {
+          const r = getRc(rid);
+          if (r && d) await save("ricambi", rid, { quantita: Math.max(0, (Number(r.quantita) || 0) - d) });
+        }
         if (m && v.km != null && v.km > (Number(m.km) || 0)) { await save("moto", m.id, { km: v.km }); }
-        toast("Intervento salvato");
+        const nUsati = usati.reduce((a, x) => a + x.qta, 0);
+        toast(nUsati ? `Intervento salvato · ${nUsati} ${nUsati === 1 ? "ricambio scalato" : "ricambi scalati"} dal magazzino` : "Intervento salvato");
       },
     });
   }
@@ -546,14 +615,14 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     openForm({
       title: r ? "Modifica ricambio" : "Nuovo ricambio",
       fields: [
-        { id: "descrizione", label: "Descrizione", required: true, full: true, value: r?.descrizione },
+        { id: "nome", label: "Nome del ricambio", required: true, full: true, value: r?.nome ?? r?.descrizione, hint: "Scrivi il nome che vuoi, es. Filtro olio Vespa 125" },
         { id: "codice", label: "Codice", value: r?.codice },
         { id: "fornitore", label: "Fornitore", value: r?.fornitore, list: [...new Set(S.ricambi.map(x => x.fornitore).filter(Boolean))] },
         { id: "quantita", label: "Quantità", type: "number", required: true, value: r?.quantita ?? 1 },
         { id: "prezzo", label: "Prezzo unitario (€)", type: "number", step: "0.01", value: r?.prezzo },
         { id: "note", label: "Note", type: "textarea", full: true, value: r?.note },
       ],
-      onSubmit: async (v) => { await save("ricambi", r?.id, v); toast(r ? "Ricambio aggiornato" : "Ricambio aggiunto"); },
+      onSubmit: async (v) => { await save("ricambi", r?.id, { ...v, descrizione: v.nome }); toast(r ? "Ricambio aggiornato" : "Ricambio aggiunto"); },
     });
   }
   function uploadDoc(motoIdX) {
@@ -686,7 +755,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       <div class="section-h"><h3>Storico manutenzione</h3>${W() ? `<button class="btn sm" data-act="addInt" data-id="${esc(m.id)}">+ Intervento</button>` : ""}</div>
       <div class="list">${ints.length ? ints.map(i => `<div class="row row-int">
         <div class="num">${esc(fmtD(i.data))}</div>
-        <div class="d"><b>${esc(i.tipo)}</b>${i.descrizione ? ` · ${esc(i.descrizione)}` : ""}<div class="meta">${[i.km != null ? fmtN(i.km) + " km" : "", i.officina].filter(Boolean).map(esc).join(" · ")}</div></div>
+        <div class="d"><b>${esc(i.tipo)}</b>${i.descrizione ? ` · ${esc(i.descrizione)}` : ""}${(i.ricambi || []).length ? `<div class="meta">Ricambi: ${i.ricambi.map(x => esc(x.nome) + (x.qta > 1 ? " ×" + x.qta : "")).join(", ")}</div>` : ""}<div class="meta">${[i.km != null ? fmtN(i.km) + " km" : "", i.officina].filter(Boolean).map(esc).join(" · ")}</div></div>
         <div class="num" style="font-weight:600">${i.costo != null ? fmtE(i.costo) : ""}</div>
         <div class="acts">${W() ? `<button class="btn sm ghost" data-act="editInt" data-id="${esc(i.id)}">Modifica</button><button class="btn sm ghost danger" data-act="delInt" data-id="${esc(i.id)}">Elimina</button>` : ""}</div>
       </div>`).join("") : `<div class="empty">Nessun intervento registrato.</div>`}</div>
@@ -706,9 +775,9 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     const pezzi = S.ricambi.reduce((a, r) => a + (Number(r.quantita) || 0), 0);
     if (!S.ricambi.length) return `<div class="card empty-big"><h2>Magazzino vuoto</h2><p>Registra i ricambi con codice, quantità, prezzo e fornitore: il valore del magazzino si calcola da solo.</p>${addBtn("addRc", "Aggiungi ricambio")}</div>`;
     const ql = q.toLowerCase();
-    let list = S.ricambi.filter(r => !ql || [r.descrizione, r.codice, r.fornitore, r.note].some(x => String(x || "").toLowerCase().includes(ql)));
+    let list = S.ricambi.filter(r => !ql || [r.nome, r.descrizione, r.codice, r.fornitore, r.note].some(x => String(x || "").toLowerCase().includes(ql)));
     const val = r => (Number(r.quantita) || 0) * (Number(r.prezzo) || 0);
-    const sorters = { descrizione: (a, b) => String(a.descrizione).localeCompare(String(b.descrizione)), quantita: (a, b) => (a.quantita || 0) - (b.quantita || 0), valore: (a, b) => val(b) - val(a), fornitore: (a, b) => String(a.fornitore || "").localeCompare(String(b.fornitore || "")) };
+    const sorters = { descrizione: (a, b) => rcName(a).localeCompare(rcName(b)), quantita: (a, b) => (a.quantita || 0) - (b.quantita || 0), valore: (a, b) => val(b) - val(a), fornitore: (a, b) => String(a.fornitore || "").localeCompare(String(b.fornitore || "")) };
     list.sort(sorters[rcSort]);
     return `<div class="tiles">
       <div class="card tile"><span>Valore magazzino</span><b>${fmtE(tot)}</b></div>
@@ -716,14 +785,14 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       <div class="card tile"><span>Pezzi totali</span><b>${fmtN(pezzi)}</b></div>
     </div>
     <div class="bar">
-      <input class="grow" type="search" id="q" placeholder="Cerca per descrizione, codice o fornitore" value="${esc(q)}" aria-label="Cerca ricambi">
+      <input class="grow" type="search" id="q" placeholder="Cerca per nome, codice o fornitore" value="${esc(q)}" aria-label="Cerca ricambi">
       <select id="rcsort" aria-label="Ordina">
-        ${[["descrizione", "Ordina: descrizione"], ["valore", "Ordina: valore"], ["quantita", "Ordina: quantità"], ["fornitore", "Ordina: fornitore"]].map(([k, l]) => `<option value="${k}"${k === rcSort ? " selected" : ""}>${l}</option>`).join("")}
+        ${[["descrizione", "Ordina: nome"], ["valore", "Ordina: valore"], ["quantita", "Ordina: quantità"], ["fornitore", "Ordina: fornitore"]].map(([k, l]) => `<option value="${k}"${k === rcSort ? " selected" : ""}>${l}</option>`).join("")}
       </select>
       ${addBtn("addRc", "Ricambio")}
     </div>
     <div class="section"><div class="list" id="rclist">${list.length ? list.map(r => `<div class="row row-rc">
-      <div><b>${esc(r.descrizione)}</b><div class="meta">${[r.codice ? "Cod. " + r.codice : "", r.fornitore].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div>${r.note ? `<div class="meta">${esc(r.note)}</div>` : ""}</div>
+      <div><b>${esc(rcName(r))}</b><div class="meta">${[r.codice ? "Cod. " + r.codice : "", r.fornitore].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div>${r.note ? `<div class="meta">${esc(r.note)}</div>` : ""}</div>
       <div class="c-q">${W() ? `<div class="qty"><button data-act="qMinus" data-id="${esc(r.id)}" aria-label="Diminuisci">−</button><span>${fmtN(r.quantita)}</span><button data-act="qPlus" data-id="${esc(r.id)}" aria-label="Aumenta">+</button></div>` : `<span class="num">${fmtN(r.quantita)} pz</span>`}</div>
       <div class="c-p num meta">${r.prezzo != null ? fmtE(r.prezzo) + " cad." : "–"}</div>
       <div class="num" style="font-weight:600;text-align:right">${fmtE(val(r))}</div>
@@ -771,7 +840,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     <div class="bar" style="margin-top:8px"><h2>Magazzino ricambi</h2></div>
     ${S.ricambi.length ? `<div class="section"><h3>Per fornitore</h3><div class="bars">${forn.map(([f, v]) => bar(f, v, maxF)).join("")}</div></div>
     <div class="section"><h3>I 5 articoli di maggior valore</h3><div class="scroll"><table><thead><tr><th>Ricambio</th><th class="n">Q.tà</th><th class="n">Prezzo</th><th class="n">Valore</th></tr></thead><tbody>
-      ${top.map(r => `<tr><td>${esc(r.descrizione)}${r.codice ? ` <span class="meta" style="color:var(--muted)">${esc(r.codice)}</span>` : ""}</td><td class="n">${fmtN(r.quantita)}</td><td class="n">${fmtE(r.prezzo)}</td><td class="n"><b>${fmtE(val(r))}</b></td></tr>`).join("")}
+      ${top.map(r => `<tr><td>${esc(rcName(r))}${r.codice ? ` <span class="meta" style="color:var(--muted)">${esc(r.codice)}</span>` : ""}</td><td class="n">${fmtN(r.quantita)}</td><td class="n">${fmtE(r.prezzo)}</td><td class="n"><b>${fmtE(val(r))}</b></td></tr>`).join("")}
     </tbody></table></div></div>` : `<div class="section"><div class="empty">Nessun ricambio registrato.</div></div>`}`;
   }
 
@@ -815,7 +884,14 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     }),
     addInt: (id) => formInt(id),
     editInt: (id) => { const i = S.interventi.find(x => x.id === id); formInt(i.motoId, i); },
-    delInt: (id) => openConfirm("Eliminare questo intervento?", "Elimina", async () => { await del("interventi", id); toast("Intervento eliminato"); }),
+    delInt: (id) => {
+      const it = S.interventi.find(x => x.id === id); const used = (it?.ricambi || []).filter(x => getRc(x.id));
+      openConfirm(used.length ? "Eliminare questo intervento? I ricambi usati tornano in magazzino." : "Eliminare questo intervento?", "Elimina", async () => {
+        await del("interventi", id);
+        for (const x of used) { const r = getRc(x.id); await save("ricambi", x.id, { quantita: (Number(r.quantita) || 0) + (Number(x.qta) || 0) }); }
+        toast(used.length ? "Intervento eliminato · ricambi rimessi in magazzino" : "Intervento eliminato");
+      });
+    },
     upDoc: (id) => uploadDoc(id),
     openDoc: (id) => openDoc(id),
     renew: (id, el) => formRinnova(id, el.dataset.key),
