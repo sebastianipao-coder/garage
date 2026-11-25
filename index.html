@@ -281,6 +281,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   const S = { moto: [], interventi: [], documenti: [], ricambi: [], spostamenti: [] };
   const loaded = new Set();
   let sb = null, session = null, membro = null, canWrite = true, offline = false, failed = false, setup = false;
+  let recovery = /type=recovery/.test(location.hash + location.search);
   const inviteCode = (location.hash.match(/^#invito-([a-f0-9]{8,64})$/) || [])[1] || null;
   let mq = "", fSede = "tutte", fStato = "attive", fChiavi = "tutte";
   const STATI = ["Attiva", "In officina", "Ferma", "Venduta", "Demolita"];
@@ -854,6 +855,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     if (setup) { $("#sync").textContent = "Da configurare"; $("#app").innerHTML = `<div class="card login"><h2>Configurazione mancante</h2><p>Apri il file <b>config.js</b> e inserisci il Project URL e la chiave anon del tuo progetto Supabase. Le istruzioni sono nel README del repository.</p></div>`; return; }
     $("#invite").hidden = !(session && membro);
     $("#notif").hidden = !(session && membro);
+    if (recovery && session) { nav.hidden = true; $("#invite").hidden = true; $("#notif").hidden = true; $("#sync").textContent = "Nuova password"; if (!$("#npf")) renderNewPassword(); return; }
     if (!session) { $("#sync").textContent = inviteCode ? "Invito" : "Accedi per continuare"; if (!$("#lf")) (inviteCode ? renderSignup() : renderLogin()); return; }
     if (membro === null) { $("#sync").textContent = "Verifica accesso…"; $("#app").innerHTML = `<div class="card empty-big"><p>Verifica dell'accesso…</p></div>`; return; }
     if (membro === false) { nav.hidden = true; $("#sync").textContent = "Accesso non abilitato"; $("#app").innerHTML = `<div class="card login"><h2>Account non abilitato</h2><p>Il tuo account esiste ma non è ancora abilitato al garage. Chiedi a chi gestisce l'app un nuovo link di invito e registrati da lì, oppure di abilitarti.</p></div>`; return; }
@@ -988,6 +990,53 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
   route();
 
   // ---------- login ----------
+  function renderForgot(email) {
+    $("#app").innerHTML = `<form class="card login" id="lf" novalidate>
+      <h2>Password dimenticata</h2>
+      <p>Scrivi l'email con cui entri nel garage: ti mando un link per scegliere una password nuova.</p>
+      <div class="field"><label for="fe">Email</label><input id="fe" type="email" autocomplete="username" value="${esc(email || "")}" required></div>
+      <div class="err" id="lerr"></div>
+      <button class="btn pri" type="submit" id="lsub" style="justify-content:center;padding:12px">Mandami il link</button>
+      <button class="back" type="button" id="tologin" style="font-size:15px">Torna all'accesso</button>
+    </form>`;
+    $("#tologin").onclick = () => renderLogin();
+    $("#lf").onsubmit = async (e) => {
+      e.preventDefault();
+      const em = $("#fe").value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(em)) { $("#lerr").textContent = "Inserisci un indirizzo email valido."; return; }
+      $("#lsub").disabled = true; $("#lerr").textContent = "";
+      const { error } = await sb.auth.resetPasswordForEmail(em, { redirectTo: location.origin + location.pathname });
+      if (error) {
+        $("#lerr").textContent = /rate limit|too many|seconds/i.test(error.message || "") ? "Hai già chiesto un link da poco: aspetta qualche minuto e riprova." : "Non riesco a mandare l'email: " + (error.message || "riprova più tardi.");
+        $("#lsub").disabled = false; return;
+      }
+      $("#app").innerHTML = `<div class="card login"><h2>Controlla la tua email</h2><p>Se <b>${esc(em)}</b> è registrata, ti è arrivato un link (guarda anche nello spam). Aprilo da questo dispositivo e scegli la nuova password.</p><button class="btn" id="tologin2" style="justify-content:center">Torna all'accesso</button></div>`;
+      $("#tologin2").onclick = () => renderLogin();
+    };
+  }
+  function renderNewPassword() {
+    $("#app").innerHTML = `<form class="card login" id="npf" novalidate>
+      <h2>Scegli una nuova password</h2>
+      <p>Account: <b>${esc(session?.user?.email || "")}</b></p>
+      <div class="field"><label for="np1">Nuova password</label><input id="np1" type="password" autocomplete="new-password" required><span class="hint">Almeno 8 caratteri</span></div>
+      <div class="field"><label for="np2">Ripeti la password</label><input id="np2" type="password" autocomplete="new-password" required></div>
+      <div class="err" id="lerr"></div>
+      <button class="btn pri" type="submit" id="lsub" style="justify-content:center;padding:12px">Salva la password</button>
+    </form>`;
+    $("#npf").onsubmit = async (e) => {
+      e.preventDefault();
+      const p1 = $("#np1").value, p2 = $("#np2").value;
+      if (p1.length < 8) { $("#lerr").textContent = "La password deve avere almeno 8 caratteri."; return; }
+      if (p1 !== p2) { $("#lerr").textContent = "Le due password non coincidono."; return; }
+      $("#lsub").disabled = true; $("#lerr").textContent = "";
+      const { error } = await sb.auth.updateUser({ password: p1 });
+      if (error) { $("#lerr").textContent = /same|different/i.test(error.message || "") ? "Scegli una password diversa da quella vecchia." : "Non riesco a salvare la password: " + error.message; $("#lsub").disabled = false; return; }
+      recovery = false;
+      try { history.replaceState(null, "", location.pathname); } catch (err) {}
+      toast("Password aggiornata");
+      loadAll();
+    };
+  }
   function renderLogin() {
     $("#app").innerHTML = `<form class="card login" id="lf" novalidate>
       <h2>Accedi al garage</h2>
@@ -996,7 +1045,9 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       <div class="field"><label for="lp">Password</label><input id="lp" type="password" autocomplete="current-password" required></div>
       <div class="err" id="lerr"></div>
       <button class="btn pri" type="submit" id="lsub" style="justify-content:center;padding:12px">Accedi</button>
+      <button class="back" type="button" id="forgot" style="font-size:15px">Password dimenticata?</button>
     </form>`;
+    $("#forgot").onclick = () => renderForgot($("#le").value.trim());
     $("#lf").onsubmit = async (e) => {
       e.preventDefault();
       $("#lsub").disabled = true; $("#lerr").textContent = "";
@@ -1202,10 +1253,11 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
     session = data.session;
     sb.auth.onAuthStateChange((ev, s) => {
       const was = !!session; session = s;
+      if (ev === "PASSWORD_RECOVERY") { recovery = true; render(); return; }
       if (!s) { membro = null; try { localStorage.removeItem(CACHE_KEY); localStorage.removeItem("garage-membro"); } catch (e) {} if (channel) { sb.removeChannel(channel); channel = null; } COLS.forEach(c => S[c] = []); loaded.clear(); render(); }
-      else if (!was) loadAll();
+      else if (!was && !recovery) loadAll();
     });
-    if (session) loadAll(); else render();
+    if (session && !recovery) loadAll(); else render();
   }
   init();
   if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
