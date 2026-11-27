@@ -507,7 +507,7 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
       id: "ricambi", label: "Ricambi usati", type: "custom", full: true,
       html: () => {
         const opts = [...S.ricambi].sort((a, b) => rcName(a).localeCompare(rcName(b))).map(r => `<option value="${esc(r.id)}">${esc(rcName(r))}${r.codice ? " (" + esc(r.codice) + ")" : ""} · ${fmtN(disp(r.id))} disp.</option>`).join("");
-        return `<div class="rp"><div id="rp_list"></div>${S.ricambi.length ? `<div class="rp-add"><select id="rp_sel" aria-label="Scegli il ricambio"><option value="">Scegli un ricambio dal magazzino…</option>${opts}</select><input id="rp_q" type="number" min="1" value="1" inputmode="numeric" aria-label="Quantità"><button type="button" class="btn sm" id="rp_btn">Aggiungi</button></div>` : `<div class="hint" style="color:var(--muted);font-size:13px">Il magazzino è vuoto: aggiungi prima i ricambi nella sezione Ricambi.</div>`}</div>`;
+        return `<div class="rp"><div id="rp_list"></div>${S.ricambi.length ? `<div class="rp-add"><select id="rp_sel" aria-label="Aggiungi un ricambio usato"><option value="">+ Aggiungi un ricambio usato…</option>${opts}</select></div><div class="hint" style="color:var(--muted);font-size:12px">Scegli il pezzo: viene aggiunto subito. Con − e + cambi la quantità.</div>` : `<div class="hint" style="color:var(--muted);font-size:13px">Il magazzino è vuoto: aggiungi prima i ricambi nella sezione Ricambi.</div>`}</div>`;
       },
       mount: () => {
         draw();
@@ -519,14 +519,14 @@ nav.tabs[hidden], #logout[hidden] { display: none; }
           else if (x.qta > 1) x.qta--;
           draw();
         });
-        if ($("#rp_btn")) $("#rp_btn").onclick = () => {
-          const id = $("#rp_sel").value, q = Math.max(1, Number($("#rp_q").value) || 1);
-          if (!id) { toast("Scegli un ricambio dall'elenco"); return; }
-          const ex = sel.find(x => x.id === id), tot = (ex ? ex.qta : 0) + q;
-          if (tot > disp(id)) { toast(`Di "${rcName(getRc(id))}" ne hai solo ${disp(id)} in magazzino`); return; }
-          if (ex) ex.qta = tot; else sel.push({ id, qta: q });
-          $("#rp_sel").value = ""; $("#rp_q").value = 1; draw();
-        };
+        if ($("#rp_sel")) $("#rp_sel").addEventListener("change", () => {
+          const id = $("#rp_sel").value; if (!id) return;
+          const ex = sel.find(x => x.id === id), tot = (ex ? ex.qta : 0) + 1;
+          if (disp(id) < 1) toast(`"${rcName(getRc(id))}" è esaurito in magazzino`);
+          else if (tot > disp(id)) toast(`Di "${rcName(getRc(id))}" ne hai solo ${disp(id)} in magazzino`);
+          else { if (ex) ex.qta = tot; else sel.push({ id, qta: 1 }); }
+          $("#rp_sel").value = ""; draw();
+        });
       },
       read: () => sel.map(x => ({ id: x.id, qta: x.qta })),
     };

@@ -1,6 +1,6 @@
 // Garage: funziona anche senza rete. Prima prova la rete (così gli aggiornamenti arrivano subito),
 // se non c'è usa la copia salvata.
-const CACHE = "garage-v17";
+const CACHE = "garage-v18";
 const ASSETS = ["./", "./index.html", "./config.js", "./manifest.json", "./icon-180.png", "./icon-192.png", "./icon-512.png",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"];
 
